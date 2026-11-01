@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.]{3,30}$")
 RESERVED = {
     "admin", "api", "login", "signup", "feed", "explore", "reels", "messages", "notifications", "settings",
-    "search", "p", "call", "live", "saved", "new", "oauth", "age-check", "ai", "offline", "redstarvibe", "support",
+    "search", "p", "call", "live", "saved", "new", "oauth", "age-check", "ai", "offline", "redstarvibe", "support", "business", "home",
 }
 
 
