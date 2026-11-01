@@ -1,0 +1,40 @@
+name: Deploy production
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit already verified on staging
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production  # Configure required reviewers on this environment for manual approval.
+    env:
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Rolling deploy with automatic rollback
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: deploy
+          key: ${{ secrets.PROD_SSH_KEY }}
+          envs: SHA
+          script: |
+            set -e
+            cd /srv/redstarvibe
+            PREVIOUS=$(git rev-parse HEAD)
+            git fetch origin && git checkout "$SHA"
+            COMPOSE="docker compose --env-file .env -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.prod.yml"
+            IMAGE_TAG="$SHA" $COMPOSE up -d
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8080/api/v1/auth/providers >/dev/null; then exit 0; fi
+              sleep 5
+            done
+            echo "Health check failed, rolling back to $PREVIOUS"
+            git checkout "$PREVIOUS"
+            IMAGE_TAG="$PREVIOUS" $COMPOSE up -d
+            exit 1

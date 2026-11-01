@@ -1,0 +1,62 @@
+# RedStarVibe
+
+Photo and video social platform: posts, stories, reels, chat, audio and video calls, AI features and an MCP server.
+Architecture: [docs/RedStarVibe_Technical_Architecture.md](docs/RedStarVibe_Technical_Architecture.md).
+What is done and what is not: [docs/STATUS.md](docs/STATUS.md).
+
+## Run it locally
+
+You need Docker Desktop and Python 3.
+
+```bash
+python scripts/bootstrap_env.py     # creates .env with fresh secrets
+make up                             # builds and starts everything
+make seed                           # demo users and posts
+```
+
+| What | Where |
+|---|---|
+| App | http://localhost:8080 |
+| Demo login | `demo` / `RedStarDemo#2026` (also `asha`, `kabir`, `meera`, `rohan`). `demo` is an admin. |
+| Emails sent locally (sign up codes) | http://localhost:8025 |
+| API docs | http://localhost:8080/api/docs |
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `apps/web` | Next.js PWA. Mobile bottom tabs, tablet rail, desktop side nav. |
+| `apps/backend` | FastAPI modular monolith, WebSocket gateway, MCP server, Celery workers. |
+| `packages/api-types` | TypeScript types generated from the OpenAPI schema (`make types`). |
+| `infra` | Docker Compose, nginx, Terraform, Helm, Argo CD, monitoring. |
+
+## Common commands
+
+```bash
+make test       # backend tests against real Postgres and Redis
+make test-web   # unit tests, type check and lint
+make e2e        # Playwright at 360, 768 and 1280 px (stack must be running and seeded)
+make lint       # ruff and mypy
+make load       # k6 baseline
+make types      # regenerate frontend types after an API change
+make logs
+make down
+```
+
+## Turning on optional features
+
+Each is off, or degrades gracefully, until configured in `.env`:
+
+| Feature | Setting | Without it |
+|---|---|---|
+| Claude features: captions, assistant answers, image moderation, insights | `ANTHROPIC_API_KEY` | Captions return a clear error. The assistant quotes sources. Moderation uses rules only. |
+| Google sign in | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The button is hidden. |
+| Bot check on sign up | `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` | Skipped. |
+| Semantic search, CLIP image search, subtitles | Build with `UV_EXTRAS="--extra ai"`, then set `EMBEDDING_PROVIDER=bge`, `CLIP_ENABLED`, `WHISPER_ENABLED` | Lexical hashed embeddings and full text search. No subtitles. |
+| Malware scanning | `--profile av` and `CLAMAV_HOST=clamav` | Skipped. |
+| Metrics dashboards | `--profile monitoring` | Metrics endpoint only. |
+
+## Deploying
+
+See [docs/runbooks/deploy-phase-1.md](docs/runbooks/deploy-phase-1.md). The app refuses to start with `APP_ENV=production`
+if secrets are weak or `COOKIE_SECURE` is off.

@@ -1,0 +1,80 @@
+{{- range $name, $d := .Values.deployments }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: {{ $d.replicas }}
+  selector:
+    matchLabels: {app: {{ $name }}}
+  template:
+    metadata:
+      labels: {app: {{ $name }}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: {{ $name }}
+          image: "{{ index $.Values.image $d.image }}:{{ $.Values.image.tag }}"
+          {{- if $d.command }}
+          command: {{ toJson $d.command }}
+          {{- end }}
+          envFrom:
+            - secretRef: {name: {{ $.Values.envSecret }}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          {{- if $d.port }}
+          ports:
+            - containerPort: {{ $d.port }}
+          {{- end }}
+          {{- if eq $name "api" }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: {{ $d.port }}}
+          livenessProbe:
+            httpGet: {path: /healthz, port: {{ $d.port }}}
+          {{- end }}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+{{- if $d.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector: {app: {{ $name }}}
+  ports:
+    - port: {{ $d.port }}
+{{- end }}
+{{- end }}
+{{- range $name, $a := .Values.autoscaling }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ $name }}}
+  minReplicas: {{ $a.min }}
+  maxReplicas: {{ $a.max }}
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: {{ $a.cpu }}}}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redstarvibe
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/load-balance: least_conn
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.host }}
+      http:
+        paths:
+          - {path: /api, pathType: Prefix, backend: {service: {name: api, port: {number: 8000}}}}
+          - {path: /ws, pathType: Exact, backend: {service: {name: ws, port: {number: 8000}}}}
+          - {path: /mcp, pathType: Prefix, backend: {service: {name: mcp, port: {number: 8001}}}}
+          - {path: /, pathType: Prefix, backend: {service: {name: web, port: {number: 3000}}}}

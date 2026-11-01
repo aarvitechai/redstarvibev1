@@ -1,0 +1,17 @@
+image:
+  backend: ghcr.io/redstarvibe/backend
+  web: ghcr.io/redstarvibe/web
+  tag: latest
+# Name of a Secret holding every environment variable from .env.example.
+envSecret: redstarvibe-env
+host: redstarvibe.com
+deployments:
+  api:   {replicas: 3, port: 8000, image: backend, command: []}
+  ws:    {replicas: 2, port: 8000, image: backend, command: [uvicorn, "app.main:app", --host, 0.0.0.0, --port, "8000"]}
+  mcp:   {replicas: 2, port: 8001, image: backend, command: [uvicorn, "app.mcp.server:app", --host, 0.0.0.0, --port, "8001"]}
+  web:   {replicas: 3, port: 3000, image: web, command: []}
+  worker: {replicas: 3, image: backend, command: [celery, -A, app.workers.celery_app, worker, -Q, "default,media,ai", -c, "4"]}
+  beat:  {replicas: 1, image: backend, command: [celery, -A, app.workers.celery_app, beat, -s, /tmp/beat]}
+autoscaling:
+  api: {min: 3, max: 30, cpu: 70}
+  web: {min: 3, max: 20, cpu: 70}

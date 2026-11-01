@@ -1,0 +1,12 @@
+{
+  "title": "RedStarVibe API (RED)",
+  "schemaVersion": 39,
+  "panels": [
+    {"type": "timeseries", "title": "Requests per second", "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+     "targets": [{"expr": "sum(rate(http_requests_total[1m]))"}]},
+    {"type": "timeseries", "title": "5xx rate", "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+     "targets": [{"expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))"}]},
+    {"type": "timeseries", "title": "p95 latency", "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+     "targets": [{"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))"}]}
+  ]
+}

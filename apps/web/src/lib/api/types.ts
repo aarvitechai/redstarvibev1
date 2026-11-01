@@ -1,0 +1,27 @@
+import type { components } from "@rsv/api-types";
+
+type S = components["schemas"];
+export type Page<T> = { items: T[]; next_cursor?: string | null };
+export type Post = S["PostOut"];
+export type Asset = S["AssetOut"];
+export type UserBrief = S["UserBrief"];
+export type Profile = S["ProfileOut"];
+export type Me = S["MeOut"];
+export type Comment = S["CommentOut"];
+export type Notification = S["NotificationOut"];
+export type Conversation = S["ConversationOut"];
+export type Message = S["MessageOut"];
+export type StoryGroup = S["StoryGroup"];
+export type Story = S["StoryOut"];
+export type Highlight = S["HighlightOut"];
+export type SearchResults = S["SearchResults"];
+export type CallJoin = S["CallJoin"];
+export type LiveOut = S["LiveOut"];
+export type Report = S["ReportOut"];
+export type Stats = S["Stats"];
+export type AskOut = S["AskOut"];
+export type InsightsOut = S["InsightsOut"];
+export type CaptionOut = S["CaptionOut"];
+export type UploadOut = S["UploadOut"];
+export type Collection = S["CollectionOut"];
+export type Insights = S["Insights"];

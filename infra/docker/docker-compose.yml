@@ -1,0 +1,248 @@
+# Local and Phase 1. `docker compose --env-file ../../.env -f infra/docker/docker-compose.yml up -d --build`
+name: redstarvibe
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-local}
+  PUBLIC_URL: ${PUBLIC_URL:-}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+  DATABASE_URL: postgresql+asyncpg://rsv:${POSTGRES_PASSWORD}@pgbouncer:5432/redstarvibe
+  MIGRATIONS_DATABASE_URL: postgresql+asyncpg://rsv:${POSTGRES_PASSWORD}@db:5432/redstarvibe
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  BREACHED_PASSWORD_CHECK: ${BREACHED_PASSWORD_CHECK:-true}
+  TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+  TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_TLS: ${SMTP_TLS:-false}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://objectstore:9000}
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  MEDIA_PUBLIC_BASE: ${MEDIA_PUBLIC_BASE:-/rsv-public}
+  CLAMAV_HOST: ${CLAMAV_HOST:-}
+  LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+  LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+  LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+  CLIP_ENABLED: ${CLIP_ENABLED:-false}
+  WHISPER_ENABLED: ${WHISPER_ENABLED:-false}
+  ADMIN_IP_ALLOWLIST: ${ADMIN_IP_ALLOWLIST:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  OTLP_ENDPOINT: ${OTLP_ENDPOINT:-}
+
+x-backend: &backend
+  image: redstarvibe/backend:${IMAGE_TAG:-local}
+  build:
+    context: ../../apps/backend
+    target: production
+  environment: *backend-env
+  restart: unless-stopped
+  networks: [internal]
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rsv
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: redstarvibe
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U rsv -d redstarvibe]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    environment:
+      DB_HOST: db
+      DB_USER: rsv
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: redstarvibe
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 25
+      MAX_PREPARED_STATEMENTS: 200
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, "yes", --maxmemory, 512mb, --maxmemory-policy, noeviction]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
+  objectstore:  # SeaweedFS S3 stands in for Cloudflare R2 locally. Point S3_ENDPOINT at R2 in production.
+    image: chrislusf/seaweedfs:3.97
+    entrypoint: >
+      sh -c 'printf "%s" "{\"identities\":[{\"name\":\"anonymous\",\"actions\":[\"Read:rsv-public\"]},{\"name\":\"app\",\"credentials\":[{\"accessKey\":\"$$S3_ACCESS_KEY\",\"secretKey\":\"$$S3_SECRET_KEY\"}],\"actions\":[\"Admin\",\"Read\",\"Write\",\"List\",\"Tagging\"]}]}" > /tmp/s3.json &&
+      exec weed server -dir=/data -volume.max=30 -s3 -s3.port=9000 -s3.config=/tmp/s3.json'
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    volumes: [object-data:/data]
+    healthcheck:
+      test: [CMD-SHELL, "nc -z 127.0.0.1 9000"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    networks: [internal]
+
+  storage-init:
+    <<: *backend
+    command: [python, -m, scripts.init_buckets]
+    restart: "no"
+    depends_on:
+      objectstore: {condition: service_healthy}
+
+  migrate:
+    <<: *backend
+    command: [alembic, upgrade, head]
+    restart: "no"
+    depends_on:
+      db: {condition: service_healthy}
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      WEB_CONCURRENCY: ${API_WORKERS:-4}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      pgbouncer: {condition: service_started}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8000/readyz]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  ws:  # Same codebase, separate deployment: scales independently of the REST API.
+    <<: *backend
+    command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, "8000", --proxy-headers, --forwarded-allow-ips, "*"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  mcp:
+    <<: *backend
+    command: [uvicorn, app.mcp.server:app, --host, 0.0.0.0, --port, "8001", --proxy-headers, --forwarded-allow-ips, "*"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  worker:
+    <<: *backend
+    command: [celery, -A, app.workers.celery_app, worker, -Q, "default,media,ai", -c, "${WORKER_CONCURRENCY:-3}", -l, INFO]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  beat:
+    <<: *backend
+    command: [celery, -A, app.workers.celery_app, beat, -l, INFO, -s, /tmp/celerybeat-schedule]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  web:
+    image: redstarvibe/web:${IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      LIVEKIT_ORIGIN: ${LIVEKIT_URL:-ws://localhost:7880}
+    restart: unless-stopped
+    networks: [internal]
+
+  mailpit:  # Catches all outgoing email locally. Not part of production.
+    image: axllent/mailpit:v1.24
+    ports: ["127.0.0.1:8025:8025"]
+    restart: unless-stopped
+    networks: [internal]
+
+  livekit:  # Dev mode SFU. Production uses LiveKit Cloud or a self hosted cluster.
+    image: livekit/livekit-server:v1.9.11
+    command: [--dev, --bind, 0.0.0.0, --node-ip, 127.0.0.1]
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+    restart: unless-stopped
+    networks: [internal]
+
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports: ["${HTTP_PORT:-8080}:80"]
+    depends_on: [api, ws, mcp, web, objectstore]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/nginx-health]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+    networks: [internal]
+
+  clamav:  # Optional, about 1 GB of RAM: `--profile av`, then set CLAMAV_HOST=clamav
+    image: clamav/clamav:1.4
+    profiles: [av]
+    restart: unless-stopped
+    networks: [internal]
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    profiles: [monitoring]
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    networks: [internal]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    profiles: [monitoring]
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [internal]
+
+  loki:
+    image: grafana/loki:3.1.0
+    profiles: [monitoring]
+    networks: [internal]
+
+volumes:
+  db-data:
+  redis-data:
+  object-data:
+
+networks:
+  internal:

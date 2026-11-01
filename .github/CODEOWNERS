@@ -1,0 +1,7 @@
+# Replace these placeholder teams with real GitHub teams before enabling required reviews.
+/apps/web/                         @redstarvibe/frontend
+/apps/backend/                     @redstarvibe/backend
+/apps/backend/app/ai/              @redstarvibe/ai
+/apps/backend/app/mcp/             @redstarvibe/ai
+/apps/backend/app/modules/auth/    @redstarvibe/security
+/infra/                            @redstarvibe/platform

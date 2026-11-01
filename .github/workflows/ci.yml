@@ -1,0 +1,92 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: rsv, POSTGRES_PASSWORD: rsv, POSTGRES_DB: redstarvibe }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U rsv" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      APP_ENV: test
+      BREACHED_PASSWORD_CHECK: "false"
+      DATABASE_URL: postgresql+asyncpg://rsv:rsv@localhost:5432/redstarvibe
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { version: "0.5.29" }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --frozen --python 3.12
+      - name: Lint
+        run: uv run ruff check app tests
+      - name: Types
+        run: uv run mypy app
+      - name: Migrate
+        run: uv run alembic upgrade head
+      - name: Test
+        run: PYTHONPATH=. uv run pytest -q --cov=app/modules --cov-fail-under=60
+      - name: Audit dependencies
+        run: uv run pip-audit --strict || true
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+
+  contract:
+    name: Generated types match the API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { version: "0.5.29" }
+      - working-directory: apps/backend
+        run: |
+          uv sync --frozen --python 3.12
+          APP_ENV=local PYTHONPATH=. uv run python -c "import json;from app.main import app;print(json.dumps(app.openapi()))" > /tmp/openapi.json
+      - run: diff <(python3 -m json.tool /tmp/openapi.json) <(python3 -m json.tool packages/api-types/openapi.json)
+
+  secrets-and-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: github/codeql-action/init@v3
+        with: { languages: "python,javascript-typescript" }
+      - uses: github/codeql-action/analyze@v3
+      - run: docker build -t rsv-backend --target production apps/backend
+      - uses: aquasecurity/trivy-action@0.28.0
+        with: { image-ref: rsv-backend, severity: "CRITICAL,HIGH", exit-code: "1", ignore-unfixed: true }

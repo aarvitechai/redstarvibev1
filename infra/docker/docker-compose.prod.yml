@@ -1,0 +1,31 @@
+# Phase 1 production overlay. Use with: -f docker-compose.yml -f docker-compose.prod.yml
+# R2 replaces the local object store and LiveKit Cloud replaces the dev SFU; see .env.example.
+services:
+  api:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    deploy: {replicas: 2}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  ws:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  mcp:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  worker:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  beat:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  migrate:
+    image: ghcr.io/redstarvibe/backend:${IMAGE_TAG}
+    environment: {APP_ENV: production, COOKIE_SECURE: "true"}
+  web:
+    image: ghcr.io/redstarvibe/web:${IMAGE_TAG}
+  mailpit: {profiles: [disabled]}
+  livekit: {profiles: [disabled]}
+  objectstore: {profiles: [disabled]}
+  storage-init: {profiles: [disabled]}
+  gateway:
+    depends_on: !override [api, ws, mcp, web]
+    ports: !override ["127.0.0.1:8080:80"]  # Cloudflare Tunnel or a local TLS terminator sits in front
