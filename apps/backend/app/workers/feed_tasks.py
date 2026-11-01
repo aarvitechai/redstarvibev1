@@ -83,10 +83,12 @@ def delete_stored_media(owner_id: uuid.UUID, asset_ids: list[uuid.UUID]) -> None
 async def _purge_accounts() -> None:
     async with SessionLocal() as s:
         for user_id in await users.users_due_for_purge(s):
-            asset_ids = await users.purge(s, user_id)
+            result = await users.purge(s, user_id)
             await users.audit(s, None, "account.purged", str(user_id))
             await s.commit()
-            delete_stored_media(user_id, asset_ids)
+            delete_stored_media(user_id, result.asset_ids)
+            for post_id in result.touched_post_ids:
+                await posts.invalidate(post_id)
 
 
 @celery.task(name="feed.purge_accounts")

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import not_found
+from app.core.errors import forbidden, not_found
 from app.core.events import emit
 from app.core.pagination import Page, encode_cursor
 from app.modules.moderation import repository as mod_repo
@@ -64,6 +64,8 @@ async def resolve(s: AsyncSession, admin: User, report_id: uuid.UUID, action: st
     if action == "suspend_user" and target_user:
         user = await users.by_id(s, target_user)
         if user:
+            if user.role == "superadmin" or (user.role == "admin" and admin.role != "superadmin"):
+                raise forbidden("You cannot suspend this staff member")
             user.status = "suspended"
     await users.audit(s, admin.id, f"admin.report.{action}", str(report.id), ip)
     await s.commit()

@@ -31,7 +31,7 @@ function items(counts: Counts, me: Me) {
     { href: "/live", label: "Live", icon: Radio },
     { href: "/saved", label: "Saved", icon: Bookmark },
     { href: "/ai", label: "Vibe AI", icon: Bot },
-    ...(me.role === "admin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
+    ...(me.role === "admin" || me.role === "superadmin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 }

@@ -1,9 +1,10 @@
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -118,17 +119,63 @@ async def users_due_for_purge(s: AsyncSession) -> list[uuid.UUID]:
     return list((await s.execute(q)).scalars())
 
 
-async def purge(s: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
-    """Hard delete. Tables without a foreign key (partitioned ones) are cleared explicitly."""
+@dataclass
+class PurgeResult:
+    asset_ids: list[uuid.UUID]
+    touched_post_ids: list[uuid.UUID]  # other people's posts whose counters changed, so their cache is stale
+
+
+async def purge(s: AsyncSession, user_id: uuid.UUID) -> PurgeResult:
+    """Hard delete that leaves everyone else's counters correct.
+
+    Tables without a foreign key (partitioned ones) are cleared explicitly.
+    """
     from app.ai.models import Embedding
     from app.modules.chat.models import Message
+    from app.modules.comments.models import Comment
     from app.modules.notifications.models import Notification
-    from app.modules.posts.models import Like
+    from app.modules.posts.models import Hashtag, Like, Post, PostHashtag, Save
 
     asset_ids = list((await s.execute(select(MediaAsset.id).where(MediaAsset.owner_id == user_id))).scalars())
+    own_posts = select(Post.id).where(Post.author_id == user_id)
+
+    followees = select(Follow.followee_id).where(Follow.follower_id == user_id, Follow.status == "active")
+    followers = select(Follow.follower_id).where(Follow.followee_id == user_id, Follow.status == "active")
+    await s.execute(update(User).where(User.id.in_(followees)).values(follower_count=func.greatest(User.follower_count - 1, 0)))
+    await s.execute(update(User).where(User.id.in_(followers)).values(following_count=func.greatest(User.following_count - 1, 0)))
+
+    tags = await s.execute(
+        select(PostHashtag.tag, func.count()).where(PostHashtag.post_id.in_(own_posts)).group_by(PostHashtag.tag)
+    )
+    for tag, count in tags.all():
+        await s.execute(update(Hashtag).where(Hashtag.tag == tag).values(post_count=func.greatest(Hashtag.post_count - count, 0)))
+
+    touched: set[uuid.UUID] = set()
+    liked = list((await s.execute(
+        delete(Like).where(Like.user_id == user_id, Like.post_id.not_in(own_posts)).returning(Like.post_id)
+    )).scalars())
+    if liked:
+        touched.update(liked)
+        await s.execute(update(Post).where(Post.id.in_(liked)).values(like_count=func.greatest(Post.like_count - 1, 0)))
+    saved = list((await s.execute(
+        select(Save.post_id).where(Save.user_id == user_id, Save.post_id.not_in(own_posts))
+    )).scalars())
+    if saved:
+        touched.update(saved)
+        await s.execute(update(Post).where(Post.id.in_(saved)).values(save_count=func.greatest(Post.save_count - 1, 0)))
+    commented = await s.execute(
+        select(Comment.post_id, func.count())
+        .where(Comment.author_id == user_id, Comment.post_id.not_in(own_posts), Comment.deleted_at.is_(None))
+        .group_by(Comment.post_id)
+    )
+    for post_id, count in commented.all():
+        touched.add(post_id)
+        await s.execute(update(Post).where(Post.id == post_id).values(comment_count=func.greatest(Post.comment_count - count, 0)))
+
+    await s.execute(delete(Like).where(Like.post_id.in_(own_posts)))  # likes have no foreign key to posts
     await s.execute(delete(Like).where(Like.user_id == user_id))
     await s.execute(delete(Message).where(Message.sender_id == user_id))
     await s.execute(delete(Notification).where(Notification.user_id == user_id))
     await s.execute(delete(Embedding).where(Embedding.owner_id == user_id))
     await s.execute(delete(User).where(User.id == user_id))
-    return asset_ids
+    return PurgeResult(asset_ids, list(touched))

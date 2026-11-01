@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     feed_ttl_seconds: int = 7 * 86400
     object_cache_seconds: int = 600
 
+    allow_test_data: bool = False  # production only; always allowed in local and staging
     admin_ip_allowlist: str = ""  # comma separated, blank allows all (local only)
     sentry_dsn: str = ""
     otlp_endpoint: str = ""

@@ -1,5 +1,6 @@
 """Imports every model so SQLAlchemy and Alembic see the whole schema."""
 from app.ai.models import Embedding  # noqa: F401
+from app.modules.admin.models import TestDataBatch  # noqa: F401
 from app.modules.auth.models import OAuthClient, RefreshToken  # noqa: F401
 from app.modules.calls.models import Call, CallMember  # noqa: F401
 from app.modules.chat.models import Conversation, ConversationMember, Message  # noqa: F401

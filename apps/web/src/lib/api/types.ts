@@ -25,3 +25,5 @@ export type CaptionOut = S["CaptionOut"];
 export type UploadOut = S["UploadOut"];
 export type Collection = S["CollectionOut"];
 export type Insights = S["Insights"];
+export type TestBatch = S["BatchOut"];
+export type AdminUserRow = S["UserAdminOut"];

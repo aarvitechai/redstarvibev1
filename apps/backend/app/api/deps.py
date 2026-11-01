@@ -60,13 +60,20 @@ async def admin_user(request: Request, user: Annotated[User, Depends(current_use
     allow = [ip.strip() for ip in settings.admin_ip_allowlist.split(",") if ip.strip()]
     if allow and client_ip(request) not in allow:
         raise forbidden("Admin access is not allowed from this network")
-    if user.role != "admin":
+    if user.role not in {"admin", "superadmin"}:
         raise forbidden("Admin access required")
     if settings.is_prod and not user.totp_enabled:
         raise forbidden("Admins must enable MFA")
     return user
 
 
+async def super_admin_user(user: Annotated[User, Depends(admin_user)]) -> User:
+    if user.role != "superadmin":
+        raise forbidden("Super admin access required")
+    return user
+
+
 CurrentUser = Annotated[User, Depends(current_user)]
 OptionalUser = Annotated[User | None, Depends(optional_user)]
 AdminUser = Annotated[User, Depends(admin_user)]
+SuperAdminUser = Annotated[User, Depends(super_admin_user)]

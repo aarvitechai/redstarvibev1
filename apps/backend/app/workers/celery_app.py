@@ -8,7 +8,7 @@ celery = Celery(
     broker=settings.celery_broker_url or settings.redis_url,
     include=[
         "app.workers.event_tasks", "app.workers.media_tasks", "app.workers.ai_tasks",
-        "app.workers.feed_tasks", "app.workers.notification_tasks",
+        "app.workers.feed_tasks", "app.workers.notification_tasks", "app.workers.admin_tasks",
     ],
 )
 celery.conf.update(

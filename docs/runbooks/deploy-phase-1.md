@@ -26,5 +26,5 @@
 6. Start: `IMAGE_TAG=<sha> docker compose --env-file .env -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.prod.yml up -d`
 7. Put TLS in front with a Cloudflare Tunnel to `http://127.0.0.1:8080`, and enable Cloudflare WAF managed rules.
 8. Never run `scripts.seed` in production. It refuses to run there.
-9. Promote your first admin: `UPDATE users SET role='admin' WHERE username='...'`. In production, admins must enable MFA.
+9. Create the super admin: `docker compose exec -e SUPERADMIN_PASSWORD=... api python -m scripts.make_superadmin <username> <email>`. They appoint admins from the Admin page. In production, staff must enable MFA.
 10. Schedule backups: see `restore-database.md`.

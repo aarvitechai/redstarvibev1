@@ -21,13 +21,14 @@ class User(Base):
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending active suspended deleting
-    role: Mapped[str] = mapped_column(String(20), default="user")  # user admin
+    role: Mapped[str] = mapped_column(String(20), default="user")  # user admin superadmin
     totp_secret_encrypted: Mapped[str | None] = mapped_column(Text)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     follower_count: Mapped[int] = mapped_column(Integer, default=0)
     following_count: Mapped[int] = mapped_column(Integer, default=0)
     post_count: Mapped[int] = mapped_column(Integer, default=0)
     spam_score: Mapped[float | None] = mapped_column(Float)
+    test_batch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # set only on generated test accounts
     delete_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False, lazy="joined")

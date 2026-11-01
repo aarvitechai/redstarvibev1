@@ -1,12 +1,16 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { RolesPanel } from "@/components/admin/RolesPanel";
+import { TestDataPanel } from "@/components/admin/TestDataPanel";
 import { Button, CenterSpinner, Empty, ErrorNote } from "@/components/ui";
 import { useInfinite } from "@/hooks/useInfinite";
+import { useMe } from "@/hooks/useMe";
 import { api, errorMessage } from "@/lib/api/client";
 import type { Report, Stats } from "@/lib/api/types";
-import { timeAgo } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 
-export default function AdminPage() {
+function Moderation() {
   const qc = useQueryClient();
   const stats = useQuery({ queryKey: ["admin-stats"], queryFn: () => api<Stats>("/admin/stats") });
   const reports = useInfinite<Report>(["admin-reports"], "/admin/reports");
@@ -17,10 +21,8 @@ export default function AdminPage() {
       qc.invalidateQueries({ queryKey: ["admin-stats"] });
     },
   });
-  if (stats.isError) return <Empty title="Admins only" hint={errorMessage(stats.error)} />;
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-3 sm:p-4">
-      <h1 className="text-xl font-bold">Moderation</h1>
+    <div className="space-y-4">
       {stats.data && (
         <dl className="grid grid-cols-3 gap-2 text-center">
           {[["Users", stats.data.users], ["Posts", stats.data.posts], ["Open reports", stats.data.open_reports]].map(([label, value]) => (
@@ -45,6 +47,30 @@ export default function AdminPage() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+export default function AdminPage() {
+  const { data: me } = useMe();
+  const [tab, setTab] = useState("moderation");
+  if (!me) return <CenterSpinner />;
+  const superAdmin = me.role === "superadmin";
+  if (!superAdmin && me.role !== "admin") return <Empty title="Admins only" />;
+  const tabs = [["moderation", "Moderation"], ["test-data", "Test data"], ...(superAdmin ? [["roles", "Admins"]] : [])] as const;
+  return (
+    <div className="mx-auto max-w-3xl space-y-4 p-3 sm:p-4">
+      <h1 className="text-xl font-bold">{superAdmin ? "Super admin" : "Admin"}</h1>
+      <div role="tablist" className="flex gap-2">
+        {tabs.map(([value, label]) => (
+          <button key={value} role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={cn("min-h-11 flex-1 rounded-lg text-sm font-semibold", tab === value ? "bg-brand text-white" : "bg-surface")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "moderation" && <Moderation />}
+      {tab === "test-data" && <TestDataPanel />}
+      {tab === "roles" && superAdmin && <RolesPanel />}
     </div>
   );
 }
