@@ -57,7 +57,7 @@ export function BottomNav({ me, counts }: { me: Me; counts: Counts }) {
         {tabs.map((t) => (
           <li key={t.href}>
             <Link href={t.href} aria-label={t.label} className="flex h-12 w-12 items-center justify-center">
-              <t.icon className={cn("h-6 w-6", isActive(path, t.href) && "stroke-[2.6] text-brand")} />
+              <t.icon className={cn("h-5 w-5", isActive(path, t.href) && "stroke-[2.6] text-brand")} />
             </Link>
           </li>
         ))}
@@ -82,17 +82,17 @@ export function TopBar({ counts }: { counts: Counts }) {
       </Link>
       <div className="flex">
         <Link href="/search" aria-label="Search" className="flex h-11 w-11 items-center justify-center">
-          <Search className="h-6 w-6" />
+          <Search className="h-5 w-5" />
         </Link>
         <Link href="/notifications" aria-label="Notifications" className="relative flex h-11 w-11 items-center justify-center">
           <span className="relative">
-            <Bell className="h-6 w-6" />
+            <Bell className="h-5 w-5" />
             <Badge count={counts.notifications} />
           </span>
         </Link>
         <Link href="/messages" aria-label="Messages" className="relative flex h-11 w-11 items-center justify-center">
           <span className="relative">
-            <MessageCircle className="h-6 w-6" />
+            <MessageCircle className="h-5 w-5" />
             <Badge count={counts.messages} />
           </span>
         </Link>
@@ -129,7 +129,7 @@ export function SideNav({ me, counts }: { me: Me; counts: Counts }) {
                 )}
               >
                 <span className="relative">
-                  <item.icon className={cn("h-6 w-6", active && "stroke-[2.6]")} />
+                  <item.icon className={cn("h-5 w-5", active && "stroke-[2.6]")} />
                   <Badge count={item.count ?? 0} />
                 </span>
                 <span className="hidden text-[15px] lg:inline">{item.label}</span>

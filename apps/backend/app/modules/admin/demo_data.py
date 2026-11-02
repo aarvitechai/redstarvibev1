@@ -17,7 +17,7 @@ from collections import Counter
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 import structlog
@@ -39,6 +39,7 @@ from app.modules.communities.models import Community, CommunityMember, Community
 from app.modules.feed.service import invalidate_feed
 from app.modules.follows.models import Follow
 from app.modules.media.models import MediaAsset
+from app.modules.media.schemas import MusicTrack
 from app.modules.moderation.models import Report
 from app.modules.notifications.models import Notification
 from app.modules.posts.models import Hashtag, Like, Post, PostCollab, PostHashtag, PostMedia, PostTag, Save
@@ -69,7 +70,9 @@ CLIP_SOURCES = (  # address, start of each clip in seconds, clip length
     ("https://download.blender.org/peach/trailer/trailer_480p.mov", range(1, 29, 3), 3),
 )
 MAX_DOWNLOAD = 20 * 1024 * 1024
-OVERLAY = {"x": 50, "y": 15, "size": "large", "style": "highlight", "color": "#C8102E"}
+OVERLAY = {"x": 50, "y": 15, "size": "medium", "style": "highlight", "color": "#C8102E"}
+EFFECTS = ("fade", "pop", "slide", "glow")
+MUSIC = get_args(MusicTrack)
 
 FIRST = ["Aarav", "Diya", "Vihaan", "Ananya", "Ishaan", "Kavya", "Reyansh", "Saanvi", "Arjun", "Myra", "Rohit", "Neha", "Kabir",
          "Pooja", "Aditya", "Meera", "Sahil", "Riya", "Karan", "Tara"]
@@ -265,10 +268,11 @@ async def _make_posts(
         post_rows.append({
             "id": post_id, "author_id": author.id, "caption": caption, "location": rng.choice(PLACES), "visibility": "public",
             "status": "published", "is_reel": i < DEMO_REELS, "is_capsule": False, "like_count": len(fans),
+            "music": rng.choice(MUSIC) if i < DEMO_REELS or i % 5 == 0 else None,
             "comment_count": len(commenters), "view_count": views, "save_count": 0,
             "engagement_score": len(fans) + 2 * len(commenters) + 0.05 * views, "created_at": when,
         })
-        overlay = {**OVERLAY, "text": rng.choice(LINES)} if i % 100 == 0 else None
+        overlay = {**OVERLAY, "text": rng.choice(LINES), "effect": rng.choice(EFFECTS)} if i < DEMO_REELS or i % 20 == 0 else None
         media_rows.append({"post_id": post_id, "asset_id": asset.id, "position": 0, "text_overlay": overlay})
         like_rows += [{"user_id": f.id, "post_id": post_id, "created_at": when} for f in fans]
         first_comment: uuid.UUID | None = None

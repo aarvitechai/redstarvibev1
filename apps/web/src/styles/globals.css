@@ -61,8 +61,27 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+/* Text on media: moves in, then rests, then repeats so people scrolling past still catch it. */
+@keyframes text-fade {
+  0% { opacity: 0; }
+  18%, 100% { opacity: 1; }
+}
+@keyframes text-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  18%, 100% { transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes text-slide {
+  0% { opacity: 0; transform: translate(-50%, 30%); }
+  18%, 100% { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes text-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 0.3em rgb(255 255 255 / 0.9)); }
+}
 @media (prefers-reduced-motion: reduce) {
   * {
+    animation-iteration-count: 1 !important;
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;

@@ -8,6 +8,8 @@ type UiState = {
   setTyping: (conversationId: string, at: number) => void;
   toast: string | null;
   showToast: (message: string | null) => void;
+  videoMuted: boolean;
+  setVideoMuted: (muted: boolean) => void;
 };
 
 export const useUi = create<UiState>((set) => ({
@@ -17,4 +19,6 @@ export const useUi = create<UiState>((set) => ({
   setTyping: (id, at) => set((s) => ({ typing: { ...s.typing, [id]: at } })),
   toast: null,
   showToast: (toast) => set({ toast }),
+  videoMuted: true,
+  setVideoMuted: (videoMuted) => set({ videoMuted }),
 }));

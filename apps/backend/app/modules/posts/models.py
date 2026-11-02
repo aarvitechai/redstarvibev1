@@ -33,6 +33,7 @@ class Post(Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_capsule: Mapped[bool] = mapped_column(Boolean, default=False)
+    music: Mapped[str | None] = mapped_column(String(30))  # a track id, see MusicTrack in media/schemas.py
     search_text: Mapped[str | None] = deferred(mapped_column(Text))
     search_tsv: Mapped[Any] = deferred(mapped_column(TSVECTOR))
     embedding: Mapped[Any] = deferred(mapped_column(Vector(EMBEDDING_SIZE)))

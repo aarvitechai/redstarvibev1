@@ -28,6 +28,7 @@ export function overlayStyle(overlay: TextOverlay): CSSProperties {
     textAlign: "center",
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
+    ...(overlay.effect && overlay.effect !== "none" ? { animation: `text-${overlay.effect} 4s ease-out infinite` } : null),
     ...look[overlay.style],
   };
 }

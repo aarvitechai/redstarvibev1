@@ -102,6 +102,19 @@ async def _ready_asset(owner_id: str) -> str:
 OVERLAY = {"text": "  Big sale today  ", "x": 50, "y": 15, "size": "large", "style": "highlight", "color": "#C8102E"}
 
 
+async def test_music_and_text_effect_are_saved_and_checked(make_user):
+    a = await make_user()
+    asset = await _ready_asset(a.id)
+    body = {"asset_ids": [asset], "caption": "hi", "music": "sunrise", "text_overlays": [OVERLAY | {"effect": "pop"}]}
+    with patch("app.modules.posts.service.enqueue", AsyncMock()):
+        assert (await a.post("/posts", json=body | {"music": "a real song"})).status_code == 422
+        assert (await a.post("/posts", json=body | {"text_overlays": [OVERLAY | {"effect": "spin"}]})).status_code == 422
+        res = await a.post("/posts", json=body)
+    assert res.status_code == 201, res.text
+    assert res.json()["music"] == "sunrise"
+    assert res.json()["media"][0]["text_overlay"]["effect"] == "pop"
+
+
 async def test_text_on_media_is_saved_and_returned(make_user):
     a = await make_user()
     with patch("app.modules.posts.service.enqueue", AsyncMock()):

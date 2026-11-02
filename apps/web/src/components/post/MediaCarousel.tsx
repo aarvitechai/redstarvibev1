@@ -15,7 +15,7 @@ export function frameRatio(width?: number | null, height?: number | null): numbe
   return width && height ? Math.max(0.8, Math.min(1.91, width / height)) : 1;
 }
 
-export function MediaCarousel({ media, priority, onView }: { media: Asset[]; priority?: boolean; onView?: () => void }) {
+export function MediaCarousel({ media, priority, onView, silent }: { media: Asset[]; priority?: boolean; onView?: () => void; silent?: boolean }) {
   const [index, setIndex] = useState(0);
   const track = useRef<HTMLDivElement>(null);
   const ratio = frameRatio(media[0]?.width, media[0]?.height);
@@ -34,7 +34,7 @@ export function MediaCarousel({ media, priority, onView }: { media: Asset[]; pri
           <div key={asset.id} className="relative h-full w-full shrink-0 snap-center">
             <div className="h-full w-full" style={editStyle(asset.edit)}>
               {asset.kind === "video" ? (
-                <VideoPlayer asset={asset} onView={onView} className="h-full w-full object-contain" />
+                <VideoPlayer asset={asset} onView={onView} silent={silent} className="h-full w-full object-contain" />
               ) : (
                 <MediaImage asset={asset} sizes={SIZES} priority={priority && i === 0} className="h-full w-full object-cover" />
               )}

@@ -28,7 +28,35 @@ export function useCaptionSuggestions(assetId: string | undefined, enabled: bool
   }).data;
 }
 
-export function CaptionChips({ suggestions, onCaption, onHashtag }: { suggestions?: CaptionSuggestions; onCaption: (text: string) => void; onHashtag: (tag: string) => void }) {
+/** The one place to find AI help in the composer, including why it is missing when it is switched off. */
+export function MakeEffective({ enabled, suggestions, canSetUp, onApply }: { enabled: boolean; suggestions?: CaptionSuggestions; canSetUp: boolean; onApply: (s: CaptionSuggestions) => void }) {
+  if (!enabled) {
+    if (!canSetUp) return null;
+    return (
+      <p data-testid="ai-off" className="flex gap-2 rounded-lg border border-line p-3 text-xs text-muted">
+        <Sparkles aria-hidden className="h-4 w-4 shrink-0" />
+        <span><b>Make it effective with AI is off.</b> Set AI_PROVIDER, CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN in .env, then restart. Only staff see this note.</span>
+      </p>
+    );
+  }
+  const ready = suggestions?.status === "ready";
+  return (
+    <section aria-label="Make it effective" className="rounded-lg border border-brand/40 p-3">
+      <Button className="w-full" disabled={!ready} onClick={() => suggestions && onApply(suggestions)}>
+        <Sparkles aria-hidden className="h-4 w-4" /> Make it effective with AI
+      </Button>
+      <p className="mt-1.5 text-xs text-muted">
+        {suggestions?.status === "failed"
+          ? "AI could not read this one. You can still write your own."
+          : ready
+            ? "Adds a caption, hashtags, animated text, an image description and matching music. You can change all of it."
+            : "AI is looking at your upload. You can share without waiting."}
+      </p>
+    </section>
+  );
+}
+
+export function CaptionChips({ suggestions, onCaption, onHashtag, onAltText }: { suggestions?: CaptionSuggestions; onCaption: (text: string) => void; onHashtag: (tag: string) => void; onAltText: (text: string) => void }) {
   if (!suggestions || suggestions.status === "disabled" || suggestions.status === "failed") return null;
   if (suggestions.status === "pending") return <p className="flex items-center gap-2 text-xs text-muted"><Sparkles aria-hidden className="h-3.5 w-3.5" /> AI suggestions are on the way. You can share without waiting.</p>;
   return (
@@ -40,6 +68,7 @@ export function CaptionChips({ suggestions, onCaption, onHashtag }: { suggestion
       <div className="flex flex-wrap gap-1">
         {suggestions.hashtags?.map((tag) => <button key={tag} type="button" className={chip} onClick={() => onHashtag(tag)}>#{tag}</button>)}
       </div>
+      {suggestions.alt_text && <button type="button" className={chip} onClick={() => onAltText(suggestions.alt_text as string)}>Use image description: {suggestions.alt_text}</button>}
     </section>
   );
 }

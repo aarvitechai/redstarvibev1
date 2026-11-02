@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Eye, Heart, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editStyle } from "@/components/post/mediaEdit";
+import { PostMusic } from "@/components/post/Music";
 import { TextOverlayView } from "@/components/post/TextOverlay";
 import { VideoPlayer } from "@/components/post/VideoPlayer";
 import { Avatar, CenterSpinner, Empty } from "@/components/ui";
@@ -17,6 +18,7 @@ function Reel({ post }: { post: Post }) {
   const [liked, setLiked] = useState(post.liked);
   const [likes, setLikes] = useState(post.like_count);
   const [views, setViews] = useState(post.view_count);
+  const [expanded, setExpanded] = useState(false);
   const media = post.media[0];
   const onView = useCallback(() => {
     api<{ view_count: number }>(`/posts/${post.id}/view`, { method: "POST" })
@@ -27,14 +29,15 @@ function Reel({ post }: { post: Post }) {
   return (
     <section className="relative h-[calc(100dvh-7rem)] snap-start snap-always bg-black sm:h-dvh">
       <div className="h-full w-full" style={editStyle(media.edit)}>
-        <VideoPlayer asset={media} onView={onView} className="h-full w-full object-contain" />
+        <VideoPlayer asset={media} onView={onView} silent={!!post.music} className="h-full w-full object-contain" />
       </div>
       <TextOverlayView overlay={media.text_overlay} />
+      {post.music && <PostMusic track={post.music} className="left-2 top-1" />}
       <div className="absolute bottom-16 left-3 right-16 text-white drop-shadow">
         <Link href={`/${post.author.username}`} className="flex items-center gap-2 font-semibold">
           <Avatar user={post.author} size={32} /> {post.author.username}
         </Link>
-        <p className="mt-1 line-clamp-2 text-sm">{post.caption}</p>
+        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={cn("mt-1 block text-left text-sm", !expanded && "line-clamp-2")}>{post.caption}</button>
       </div>
       <div className="absolute bottom-20 right-1 flex flex-col items-center gap-2 text-white">
         <button
@@ -47,14 +50,14 @@ function Reel({ post }: { post: Post }) {
             setLikes(res.like_count);
           }}
         >
-          <Heart className={cn("h-7 w-7", liked && "fill-brand stroke-brand")} />
+          <Heart className={cn("h-5 w-5", liked && "fill-brand stroke-brand")} />
         </button>
         <span className="text-xs">{compactNumber(likes)}</span>
         <Link href={`/p/${post.id}`} aria-label="Comments" className="flex h-11 w-11 items-center justify-center">
-          <MessageCircle className="h-7 w-7" />
+          <MessageCircle className="h-5 w-5" />
         </Link>
         <span className="text-xs">{compactNumber(post.comment_count)}</span>
-        <Eye aria-hidden className="mt-2 h-6 w-6" />
+        <Eye aria-hidden className="mt-2 h-4 w-4" />
         <span className="text-xs" aria-label={`${views} views`}>{compactNumber(views)}</span>
       </div>
     </section>

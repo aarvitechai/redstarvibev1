@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, StringConstraints
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"}
 VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 AUDIO_TYPES = {"audio/webm", "audio/ogg", "audio/mp4"}
+MusicTrack = Literal["golden-hour", "city-lights", "monsoon", "festival", "road-trip", "sunrise"]  # files in web public/music
 
 
 class UploadIn(BaseModel):
@@ -36,6 +37,7 @@ class TextOverlay(BaseModel):
     size: Literal["small", "medium", "large"]
     style: Literal["shadow", "label", "highlight"]
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    effect: Literal["none", "fade", "pop", "slide", "glow"] = "none"
 
 
 class MediaEdit(BaseModel):

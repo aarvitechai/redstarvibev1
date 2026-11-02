@@ -104,10 +104,11 @@ async def _suggest_captions(asset_id: uuid.UUID) -> None:
         images = asset.variants.get("images") or []
         small = next((i for i in images if i["w"] >= CAPTION_IMAGE_WIDTH), images[-1] if images else None)
         key = asset.variants.get("poster") or (small and small["webp"])
+        is_video = asset.kind == "video"
     if not key:
         return
     data = internal().get_object(Bucket=settings.s3_public_bucket, Key=key)["Body"].read()
-    await store_captions(asset_id, await suggest_from_image(_as_jpeg(data)))
+    await store_captions(asset_id, await suggest_from_image(_as_jpeg(data), is_video))
 
 
 def _as_jpeg(data: bytes) -> bytes:

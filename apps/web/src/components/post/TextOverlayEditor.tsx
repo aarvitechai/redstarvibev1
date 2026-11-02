@@ -18,12 +18,19 @@ const SIZES: { value: TextOverlay["size"]; label: string }[] = [
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
 ];
+const EFFECTS: { value: NonNullable<TextOverlay["effect"]>; label: string }[] = [
+  { value: "none", label: "Still" },
+  { value: "fade", label: "Fade" },
+  { value: "pop", label: "Pop" },
+  { value: "slide", label: "Slide" },
+  { value: "glow", label: "Glow" },
+];
 const PLACES = [
   { label: "Top", y: 15 },
   { label: "Middle", y: 50 },
   { label: "Bottom", y: 85 },
 ];
-const START = { x: 50, y: 50, size: "medium", style: "shadow", color: "#FFFFFF" } as const;
+const START = { x: 50, y: 50, size: "medium", style: "shadow", color: "#FFFFFF", effect: "none" } as const;
 
 function Choice({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -146,6 +153,13 @@ export function TextOverlayEditor({
             {SIZES.map((s) => (
               <Choice key={s.value} pressed={value.size === s.value} onClick={() => onChange({ ...value, size: s.value })}>
                 {s.label}
+              </Choice>
+            ))}
+          </div>
+          <div className="flex gap-2" role="group" aria-label="Text animation">
+            {EFFECTS.map((e) => (
+              <Choice key={e.value} pressed={(value.effect ?? "none") === e.value} onClick={() => onChange({ ...value, effect: e.value })}>
+                {e.label}
               </Choice>
             ))}
           </div>

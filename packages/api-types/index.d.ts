@@ -2947,6 +2947,10 @@ export interface components {
              * @default []
              */
             hashtags: string[];
+            /** Alt Text */
+            alt_text?: string | null;
+            /** Music */
+            music?: string | null;
         };
         /** Citation */
         Citation: {
@@ -3782,6 +3786,8 @@ export interface components {
              * @default false
              */
             is_capsule: boolean;
+            /** Music */
+            music?: ("golden-hour" | "city-lights" | "monsoon" | "festival" | "road-trip" | "sunrise") | null;
             /**
              * Draft
              * @default false
@@ -3826,6 +3832,8 @@ export interface components {
              * @default false
              */
             is_capsule: boolean;
+            /** Music */
+            music?: string | null;
             /** Like Count */
             like_count: number;
             /** Comment Count */
@@ -4315,6 +4323,12 @@ export interface components {
             style: "shadow" | "label" | "highlight";
             /** Color */
             color: string;
+            /**
+             * Effect
+             * @default none
+             * @enum {string}
+             */
+            effect: "none" | "fade" | "pop" | "slide" | "glow";
         };
         /** TicketIn */
         TicketIn: {

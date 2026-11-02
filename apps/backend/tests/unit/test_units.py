@@ -75,7 +75,13 @@ def test_caption_parser_rejects_bad_model_output():
         assert parse_suggestions(bad) is None
     raw = '{"captions": ["One", "Two", "Three", "Four"], "tagline": "Go", "hashtags": ["#Beach", "a b", "x"]}'
     good = parse_suggestions(f"Sure! {raw}")
-    assert good == {"captions": ["One", "Two", "Three"], "tagline": "Go", "hashtags": ["beach", "x"]}
+    expected = {"captions": ["One", "Two", "Three"], "tagline": "Go", "hashtags": ["beach", "x"], "alt_text": None, "music": None}
+    assert good == expected
+    assert parse_suggestions('{"captions": ["One"], "music": "sunrise"}')["music"] == "sunrise"
+    assert parse_suggestions('{"captions": ["One"], "music": "a real song"}')["music"] is None
+    described = parse_suggestions('{"captions": ["One"], "alt_text": " A red boat on a lake. "}')
+    assert described["alt_text"] == "A red boat on a lake."
+    assert parse_suggestions('{"captions": ["One"], "alt_text": 5}')["alt_text"] is None
 
 
 def test_query_normalized():

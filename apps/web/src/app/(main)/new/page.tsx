@@ -1,16 +1,19 @@
 "use client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ImagePlus, Type, X } from "lucide-react";
+import { CheckCircle2, Circle, ImagePlus, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
-import { CaptionChips, ImproveCaption, useAiFeatures, useCaptionSuggestions } from "@/components/post/AiWriting";
+import { CaptionChips, ImproveCaption, MakeEffective, useAiFeatures, useCaptionSuggestions } from "@/components/post/AiWriting";
 import { frameRatio } from "@/components/post/MediaCarousel";
+import { MusicPicker, type TrackId } from "@/components/post/Music";
 import { isEdited } from "@/components/post/mediaEdit";
+import { postChecklist } from "@/components/post/postChecklist";
 import { TextOverlayEditor } from "@/components/post/TextOverlayEditor";
 import { Button, ErrorNote, Field, Input, Spinner } from "@/components/ui";
+import { useMe } from "@/hooks/useMe";
 import { api, errorMessage } from "@/lib/api/client";
-import type { MediaEdit, Post, TextOverlay } from "@/lib/api/types";
+import type { CaptionSuggestions, MediaEdit, Post, TextOverlay } from "@/lib/api/types";
 import { uploadAsset } from "@/lib/api/upload";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
@@ -45,6 +48,8 @@ function NewPost() {
   const [visibility, setVisibility] = useState("public");
   const [schedule, setSchedule] = useState("");
   const [altText, setAltText] = useState("");
+  const [music, setMusic] = useState<TrackId | null>(null);
+  const { data: me } = useMe();
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const idempotency = useRef(crypto.randomUUID());
@@ -87,6 +92,7 @@ function NewPost() {
           tagged_usernames: tags.split(/[\s,]+/).filter(Boolean),
           collab_username: collab.trim() || null,
           is_capsule: capsule && !draft,
+          music,
           media_edits: items.map((i) => (isEdited(i.edit) ? i.edit : null)),
           text_overlays: items.map((i) => (i.overlay?.text.trim() ? i.overlay : null)),
         },
@@ -98,6 +104,7 @@ function NewPost() {
       if (draft || schedule) {
         setItems([]);
         setCaption("");
+        setMusic(null);
         setTags("");
         setCollab("");
         setCapsule(false);
@@ -112,6 +119,18 @@ function NewPost() {
   const features = useAiFeatures();
   const suggestions = useCaptionSuggestions(selected?.assetId, !!features?.captions);
   const addHashtag = (tag: string) => setCaption((text) => (text.includes(`#${tag}`) ? text : `${text.trimEnd()} #${tag}`.trimStart()));
+  const applyAi = (s: CaptionSuggestions) => {
+    // Fills only what is still empty, so nothing the person wrote is ever replaced.
+    if (!caption.trim() && s.captions[0]) setCaption(s.captions[0]);
+    s.hashtags.forEach(addHashtag);
+    if (!altText && s.alt_text) setAltText(s.alt_text);
+    if (!music && s.music) setMusic(s.music as TrackId);
+    if (selected && !selected.overlay && s.tagline) {
+      setOverlay(selected.key, { text: s.tagline, x: 50, y: 15, size: "large", style: "highlight", color: "#C8102E", effect: "pop" });
+    }
+    toast("Applied. Check it and change anything you like.");
+  };
+  const checklist = postChecklist({ caption, altText, location, hasPhoto: items.some((i) => i.file.type.startsWith("image")) });
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-3 sm:p-4">
@@ -140,7 +159,7 @@ function NewPost() {
         ))}
         {items.length < (isReel ? 1 : 10) && (
           <button onClick={() => input.current?.click()} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line text-sm text-muted hover:bg-surface">
-            <ImagePlus className="h-7 w-7" /> Add
+            <ImagePlus className="h-5 w-5" /> Add
           </button>
         )}
       </div>
@@ -169,12 +188,14 @@ function NewPost() {
           onEditChange={(edit) => setItems((list) => list.map((i) => (i.key === selected.key ? { ...i, edit } : i)))}
         />
       )}
+      {items.length > 0 && <MakeEffective enabled={!!features?.captions} suggestions={suggestions} canSetUp={!!me && me.role !== "user"} onApply={applyAi} />}
       <Field label="Caption">
         <textarea value={caption} maxLength={2200} rows={4} onChange={(e) => setCaption(e.target.value)} placeholder="Say something. Use #hashtags and @mentions." className="w-full rounded-lg border border-line bg-surface p-3 text-[16px] focus:border-brand focus:outline-none sm:text-sm" />
       </Field>
       <p className="-mt-3 text-right text-xs text-muted">{caption.length}/2200</p>
-      <CaptionChips suggestions={suggestions} onCaption={setCaption} onHashtag={addHashtag} />
+      <CaptionChips suggestions={suggestions} onCaption={setCaption} onHashtag={addHashtag} onAltText={setAltText} />
       {features?.writing && <ImproveCaption caption={caption} onAccept={setCaption} onHashtag={addHashtag} />}
+      {items.length > 0 && <MusicPicker value={music} onChange={setMusic} />}
       <Field label="Image description for screen readers">
         <Input value={altText} maxLength={500} onChange={(e) => setAltText(e.target.value)} />
       </Field>
@@ -201,6 +222,19 @@ function NewPost() {
           <input type="checkbox" checked={capsule} onChange={(e) => setCapsule(e.target.checked)} className="h-5 w-5 accent-[#C8102E]" />
           Seal as a time capsule: it cannot be opened before this date
         </label>
+      )}
+      {items.length > 0 && (
+        <section aria-label="Post checklist" data-testid="post-checklist" className="rounded-lg border border-line p-3">
+          <h2 className="pb-1 text-xs font-semibold text-muted">Post checklist: {checklist.filter((i) => i.done).length} of {checklist.length}</h2>
+          <ul className="grid gap-1 text-xs sm:grid-cols-2">
+            {checklist.map((item) => (
+              <li key={item.label} className={cn("flex items-center gap-1.5", !item.done && "text-muted")}>
+                {item.done ? <CheckCircle2 aria-label="Done" className="h-3.5 w-3.5 shrink-0 text-brand" /> : <Circle aria-label="To do" className="h-3.5 w-3.5 shrink-0" />}
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       <ErrorNote message={error} />
       <div className="flex gap-2">

@@ -30,6 +30,8 @@ class CaptionsOut(BaseModel):
     captions: list[str] = []
     tagline: str | None = None
     hashtags: list[str] = []
+    alt_text: str | None = None
+    music: str | None = None
 
 
 class RewriteIn(BaseModel):

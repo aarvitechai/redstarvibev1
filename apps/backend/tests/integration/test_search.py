@@ -183,7 +183,8 @@ async def test_caption_flow_stores_suggestions_for_the_owner(make_user):
         assert (await a.get(f"/ai/captions/{asset}")).json()["status"] == "pending"
         await store_captions(uuid.UUID(asset), {"captions": ["One"], "tagline": "Go", "hashtags": ["a"]})
         data = (await a.get(f"/ai/captions/{asset}")).json()
-        assert data == {"status": "ready", "captions": ["One"], "tagline": "Go", "hashtags": ["a"]}
+        expected = {"status": "ready", "captions": ["One"], "tagline": "Go", "hashtags": ["a"], "alt_text": None, "music": None}
+        assert data == expected
         await store_captions(uuid.UUID(asset), None)
         assert (await a.get(f"/ai/captions/{asset}")).json()["status"] == "failed"
 
@@ -198,3 +199,7 @@ async def test_bad_model_output_gets_one_retry_then_gives_up():
         with patch("app.ai.workers_ai.chat", chat):
             assert await writing.suggest_from_image(b"x") is None
         assert chat.await_count == 2
+        chat = AsyncMock(return_value=good)
+        with patch("app.ai.workers_ai.chat", chat):
+            await writing.suggest_from_image(b"x", is_video=True)
+        assert chat.await_args.args[2] == writing.VIDEO_PROMPT

@@ -48,6 +48,10 @@ These need something this machine did not have.
 
 The demo set has no capsules, drafts, calls, live streams, post filters or AI suggestions. Its 200 photos repeat across posts, and its stories expire after 24 hours. Disabling it hides posts, stories and profiles, but comments and chat messages from its accounts are not filtered.
 
+Post music is six original tracks synthesized by `scripts/generate_music.py`, played in the browser beside the media and not mixed into the file. There is no commercial song library, because that needs a licence.
+
+AI caption quality has not been judged on real output, because no Cloudflare or Anthropic key has been used. A video gets suggestions from its poster frame only, not from its motion or sound.
+
 Also not exercised in a browser test: disable and enable buttons, stories viewer, group calls, audio calls, live streaming, reels feed scrolling, admin actions,
 MCP write tools, draft and schedule flow. Their API rules are partly covered by the backend tests.
 

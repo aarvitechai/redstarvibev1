@@ -66,7 +66,7 @@ def _base(post: Post) -> dict[str, Any]:
         media=[asset_out(m.asset, m.alt_text, m.text_overlay, m.edit) for m in post.media],
         tagged=[user_service.brief(u) for u in post.tagged],
         collaborator=user_service.brief(post.collab.user) if post.collab and post.collab.status == "accepted" else None,
-        pinned=post.pinned_at is not None, is_capsule=post.is_capsule,
+        pinned=post.pinned_at is not None, is_capsule=post.is_capsule, music=post.music,
         like_count=post.like_count, comment_count=post.comment_count, view_count=post.view_count,
         save_count=post.save_count, created_at=post.created_at, scheduled_at=post.scheduled_at,
     ).model_dump(mode="json")
@@ -242,7 +242,7 @@ async def create_post(s: AsyncSession, user: User, data: PostCreate, idempotency
         post = Post(
             author_id=user.id, caption=data.caption.strip(), location=(data.location or "").strip() or None,
             visibility=data.visibility, is_reel=data.is_reel, status=status, scheduled_at=data.scheduled_at,
-            is_capsule=data.is_capsule,
+            is_capsule=data.is_capsule, music=data.music,
         )
         post.media = [
             PostMedia(

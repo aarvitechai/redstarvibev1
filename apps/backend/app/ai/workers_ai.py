@@ -7,6 +7,7 @@ import structlog
 from app.core.config import settings
 
 log = structlog.get_logger()
+MAX_REPLY_TOKENS = 800  # the short default can cut a JSON reply in half
 
 
 async def _run(model: str, body: dict[str, Any], seconds: float) -> dict[str, Any] | None:
@@ -30,7 +31,10 @@ async def embed(model: str, texts: list[str], seconds: float) -> list[list[float
 
 
 async def chat(model: str, system: str, user: str, seconds: float, image_b64: str | None = None) -> str | None:
-    body: dict[str, Any] = {"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    body: dict[str, Any] = {
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "max_tokens": MAX_REPLY_TOKENS,
+    }
     if image_b64:
         body["image"] = image_b64
     result = await _run(model, body, seconds)
