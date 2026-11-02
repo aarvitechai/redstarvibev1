@@ -1,8 +1,8 @@
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import ColumnElement, and_, delete, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, and_, delete, exists, func, literal_column, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -27,6 +27,33 @@ def visible_clause(viewer_id: uuid.UUID | None) -> ColumnElement[bool]:
         and_(b.blocker_id == Post.author_id, b.blocked_id == viewer_id),
     ))
     return and_(base, ~blocked, or_(public, Post.author_id == viewer_id, follows))
+
+
+async def is_timezone(s: AsyncSession, name: str) -> bool:
+    q = text("SELECT 1 FROM pg_timezone_names WHERE name = :name")
+    return (await s.execute(q, {"name": name})).first() is not None
+
+
+async def likes_by_hour(s: AsyncSession, author: uuid.UUID, tz: str, days: int) -> list[tuple[int, int]]:
+    hour = func.extract("hour", func.timezone(tz, Like.created_at)).label("h")
+    since = datetime.now(UTC) - timedelta(days=days)
+    q = (
+        select(hour, func.count()).join(Post, Post.id == Like.post_id)
+        .where(Post.author_id == author, Like.user_id != author, Like.created_at >= since)
+        .group_by(literal_column("h"))
+    )
+    return [(int(h), int(n)) for h, n in (await s.execute(q)).all()]
+
+
+async def search_saved(s: AsyncSession, user_id: uuid.UUID, query: str, limit: int) -> list[uuid.UUID]:
+    """Visibility runs here too, so a saved post that has since gone private stays hidden."""
+    like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    q = (
+        select(Post.id).join(User, User.id == Post.author_id).join(Save, Save.post_id == Post.id)
+        .where(Save.user_id == user_id, visible_clause(user_id), Post.search_text.ilike(like, escape="\\"))
+        .order_by(Post.id.desc()).limit(limit)
+    )
+    return list((await s.execute(q)).scalars())
 
 
 async def pending_collab_post_ids(s: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:

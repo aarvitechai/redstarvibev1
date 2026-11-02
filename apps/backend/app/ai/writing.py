@@ -12,6 +12,7 @@ from app.modules.media.schemas import MusicTrack
 REWRITE_TIMEOUT = 10.0
 HASHTAG_TIMEOUT = 10.0
 CAPTION_TIMEOUT = 60.0
+GENERATE_TIMEOUT = 30.0
 HASHTAG_RE = re.compile(r"^\w{1,40}$", re.UNICODE)
 
 STYLES = {
@@ -49,6 +50,17 @@ def text_enabled() -> bool:
 
 def captions_enabled() -> bool:
     return settings.ai_provider == "anthropic" or (settings.cloudflare_ready and bool(settings.caption_model))
+
+
+async def generate(system: str, user: str, seconds: float = GENERATE_TIMEOUT) -> str | None:
+    """Longer answers. The caller redacts personal details first."""
+    if settings.cloudflare_ready and settings.text_model:
+        return await workers_ai.chat(settings.text_model, system, user, seconds)
+    return await llm_client.complete(system, user, max_tokens=4000)
+
+
+def generator_name() -> str:
+    return settings.text_model if settings.cloudflare_ready and settings.text_model else settings.anthropic_model
 
 
 async def _text(system: str, user: str, seconds: float) -> str | None:

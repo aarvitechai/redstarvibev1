@@ -58,6 +58,12 @@ class ProfileUpdate(BaseModel):
         return v
 
 
+class Interests(BaseModel):
+    interests: list[Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, pattern=r"^\w{1,40}$")]] = Field(
+        max_length=10
+    )
+
+
 class DataExport(BaseModel):
     profile: dict[str, object]
     posts: list[dict[str, object]]

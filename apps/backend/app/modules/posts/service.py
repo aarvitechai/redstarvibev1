@@ -25,13 +25,16 @@ from app.modules.media.service import asset_out
 from app.modules.posts import repository as repo
 from app.modules.posts.models import Collection, Post, PostCollab, PostMedia, PostTag
 from app.modules.posts.schemas import (
+    BestTimes,
     CapsuleTeaser,
     CollectionOut,
+    HourStat,
     Insights,
     LikeResult,
     PostCreate,
     PostOut,
     PostUpdate,
+    ScheduleRequest,
     ViewResult,
 )
 from app.modules.users import repository as users
@@ -43,6 +46,9 @@ from app.realtime.pubsub import publish
 HASHTAG_RE = re.compile(r"(?:^|\s)#(\w{1,60})", re.UNICODE)
 MAX_PINS = 3
 VIEW_WINDOW = 86400
+BEST_TIME_DAYS = 90
+BEST_TIME_MIN_LIKES = 20
+SCHEDULE_REQUEST_SECONDS = 7 * 86400
 VIEW_IP_LIMIT = 300  # visitor view requests per minute from one IP, high enough for a shared network
 MENTION_RE = re.compile(r"(?:^|\s)@([a-zA-Z0-9_.]{3,30})")
 
@@ -320,6 +326,58 @@ async def publish_draft(s: AsyncSession, user: User, post_id: uuid.UUID) -> Post
     return (await hydrate(s, user, [post.id]))[0]
 
 
+async def best_times(s: AsyncSession, user: User, tz: str) -> BestTimes:
+    """Plain statistics on when other people like this person's posts. No model involved."""
+    if not await repo.is_timezone(s, tz):
+        raise bad_request("invalid_timezone", "Unknown time zone")
+    rows = await repo.likes_by_hour(s, user.id, tz, BEST_TIME_DAYS)
+    top = sorted(rows, key=lambda r: (-r[1], r[0]))[:3]
+    return BestTimes(
+        enough_data=sum(n for _, n in rows) >= BEST_TIME_MIN_LIKES,
+        hours=[HourStat(hour=h, likes=n) for h, n in top],
+    )
+
+
+def _schedule_key(user_id: uuid.UUID) -> str:
+    return f"mcp:schedule:{user_id}"
+
+
+async def request_schedule(s: AsyncSession, user: User, post_id: uuid.UUID, when: datetime) -> None:
+    """An AI client can only ask. The person approves in the app, which an MCP token cannot reach."""
+    post = await _owned(s, user, post_id)
+    if post.status != "draft":
+        raise conflict("not_draft", "Only drafts can be scheduled")
+    if when.tzinfo is None or when <= datetime.now(UTC):
+        raise bad_request("invalid_schedule", "Schedule time must be in the future, with a time zone")
+    client = get_redis()
+    await client.hset(_schedule_key(user.id), str(post_id), when.isoformat())
+    await client.expire(_schedule_key(user.id), SCHEDULE_REQUEST_SECONDS)
+
+
+async def schedule_requests(s: AsyncSession, user: User) -> list[ScheduleRequest]:
+    stored = {str(k): str(v) for k, v in (await get_redis().hgetall(_schedule_key(user.id))).items()}
+    drafts = {
+        p.id: p for p in await hydrate(s, user, [uuid.UUID(i) for i in stored]) if p.is_own and p.status == "draft"
+    }
+    return [
+        ScheduleRequest(post_id=i, caption=p.caption, publish_at=datetime.fromisoformat(stored[str(i)]))
+        for i, p in drafts.items()
+    ]
+
+
+async def approve_schedule(s: AsyncSession, user: User, post_id: uuid.UUID) -> PostOut:
+    stored = await get_redis().hget(_schedule_key(user.id), str(post_id))
+    if stored is None:
+        raise not_found("Request")
+    out = await schedule_draft(s, user, post_id, datetime.fromisoformat(str(stored)))
+    await get_redis().hdel(_schedule_key(user.id), str(post_id))
+    return out
+
+
+async def decline_schedule(user: User, post_id: uuid.UUID) -> None:
+    await get_redis().hdel(_schedule_key(user.id), str(post_id))
+
+
 async def schedule_draft(s: AsyncSession, user: User, post_id: uuid.UUID, when: datetime) -> PostOut:
     post = await _owned(s, user, post_id)
     if post.status != "draft":
@@ -461,6 +519,7 @@ async def export_user_data(s: AsyncSession, user: User) -> DataExport:
             "bio": user.profile.bio, "website": user.profile.website, "is_private": user.is_private,
             "date_of_birth": str(user.date_of_birth) if user.date_of_birth else None,
             "created_at": user.created_at.isoformat(),
+            "interests": await users.interests_of(s, user.id),
         },
         posts=[
             {"id": str(p.id), "caption": p.caption, "text_on_media": p.overlay_texts, "location": p.location,

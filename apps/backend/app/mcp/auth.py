@@ -20,7 +20,7 @@ from app.modules.auth.models import OAuthClient
 from app.modules.users import repository as users
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
-SCOPES = {"read", "write:drafts"}
+SCOPES = {"read", "write:drafts", "write:reports"}
 ACCESS_HOURS = 1
 
 

@@ -2,6 +2,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { InterestPicker } from "@/components/feed/InterestPicker";
 import { PostCard } from "@/components/post/PostCard";
 import { StoryBar } from "@/components/story/StoryBar";
 import { Button, CenterSpinner, Empty, UserRow } from "@/components/ui";
@@ -50,6 +51,7 @@ export default function FeedPage() {
     <div className="mx-auto flex max-w-[960px] justify-center gap-10 sm:px-4 sm:pt-4">
       <div className="w-full min-w-0 max-w-[470px] space-y-0 sm:space-y-4">
         <StoryBar />
+        <InterestPicker />
         {feed.isLoading ? (
           <CenterSpinner />
         ) : feed.isError ? (

@@ -9,7 +9,7 @@ from app.modules.posts import service as posts
 from app.modules.posts.schemas import CapsuleTeaser, PostOut
 from app.modules.users import repository as repo
 from app.modules.users import service
-from app.modules.users.schemas import DataExport, MeOut, ProfileOut, ProfileUpdate, UserBrief
+from app.modules.users.schemas import DataExport, Interests, MeOut, ProfileOut, ProfileUpdate, UserBrief
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -37,6 +37,19 @@ async def restore_me(me: CurrentUser, s: Db) -> None:
 @router.get("/suggestions", response_model=list[UserBrief])
 async def suggestions(me: CurrentUser, s: Db, limit: int = Query(8, ge=1, le=30)) -> list[UserBrief]:
     return [service.brief(u) for u in await repo.suggestions(s, me.id, limit)]
+
+
+@router.get("/me/interests", response_model=Interests)
+async def get_interests(me: CurrentUser, s: Db) -> Interests:
+    return Interests(interests=await repo.interests_of(s, me.id))
+
+
+@router.put("/me/interests", response_model=Interests)
+async def put_interests(data: Interests, me: CurrentUser, s: Db) -> Interests:
+    chosen = list(dict.fromkeys(data.interests))
+    await repo.set_interests(s, me.id, chosen)
+    await s.commit()
+    return Interests(interests=chosen)
 
 
 @router.get("/me/blocked", response_model=list[UserBrief])

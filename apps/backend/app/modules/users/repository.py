@@ -149,6 +149,14 @@ class PurgeResult:
     touched_post_ids: list[uuid.UUID]  # other people's posts whose counters changed, so their cache is stale
 
 
+async def interests_of(s: AsyncSession, user_id: uuid.UUID) -> list[str]:
+    return list((await s.execute(select(Profile.interests).where(Profile.user_id == user_id))).scalar_one_or_none() or [])
+
+
+async def set_interests(s: AsyncSession, user_id: uuid.UUID, interests: list[str]) -> None:
+    await s.execute(update(Profile).where(Profile.user_id == user_id).values(interests=interests))
+
+
 async def purge(s: AsyncSession, user_id: uuid.UUID) -> PurgeResult:
     """Hard delete that leaves everyone else's counters correct.
 

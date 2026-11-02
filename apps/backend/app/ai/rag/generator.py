@@ -1,13 +1,12 @@
-"""Answers from retrieved context with guardrails. Falls back to quoting sources when Claude is not configured."""
+"""Answers from retrieved context with guardrails. Falls back to quoting sources when no model answers."""
 import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai import llm_client
+from app.ai import writing
 from app.ai.rag.retriever import Chunk, retrieve
 from app.ai.safety.pii import redact
-from app.core.config import settings
 
 SYSTEM = (
     "You are Vibe AI, the assistant inside the RedStarVibe social app. Answer using only the documents provided. "
@@ -44,7 +43,7 @@ async def answer(s: AsyncSession, user_id: uuid.UUID, question: str) -> Answer:
         f'<document index="{i}" title="{redact(c.title)}">{redact(c.text)}</document>'
         for i, c in enumerate(chunks, start=1)
     )
-    text = await llm_client.complete(SYSTEM, f"{docs}\n\nQuestion: {redact(question)}", max_tokens=4000, effort="low")
+    text = await writing.generate(SYSTEM, f"{docs}\n\nQuestion: {redact(question)}")
     if text:
-        return Answer(text, chunks, True, settings.anthropic_model)
+        return Answer(text, chunks, True, writing.generator_name())
     return Answer(_extractive(question, chunks), chunks, False, "extractive-v1")

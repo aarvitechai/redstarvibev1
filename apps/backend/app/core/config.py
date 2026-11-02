@@ -71,7 +71,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-opus-5-5"
     ai_daily_quota: int = 50
-    embedding_provider: str = "hash"  # hash | bge
     ai_provider: str = "none"  # none cloudflare anthropic
     cloudflare_account_id: str = ""
     cloudflare_ai_token: str = ""
@@ -80,7 +79,7 @@ class Settings(BaseSettings):
     caption_model: str = "@cf/meta/llama-3.2-11b-vision-instruct"
     whisper_enabled: bool = False
     whisper_model: str = "small"
-    embedding_dim: int = 512
+    embedding_dim: int = 1024  # matches bge-m3, so post search and the assistant share a model
 
     celebrity_threshold: int = 10_000
     feed_max_items: int = 800

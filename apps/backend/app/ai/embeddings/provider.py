@@ -1,25 +1,18 @@
-"""Text embeddings. Default 'hash' needs no model download; 'bge' uses BGE-M3 (install the ai extra)."""
-import asyncio
+"""Assistant embeddings: bge-m3 on Workers AI when configured, otherwise offline hashing. Each row records its model."""
 import hashlib
 import re
-from functools import lru_cache
 
 import numpy as np
 
+from app.ai.embeddings import search as cloud
 from app.core.config import settings
 
 TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+HASH_MODEL = "hash-v1"
 
 
-def model_name() -> str:
-    return "BAAI/bge-m3" if settings.embedding_provider == "bge" else "hash-v1"
-
-
-def _normalize(vec: np.ndarray) -> list[float]:
-    norm = float(np.linalg.norm(vec))
-    if norm > 0:
-        vec = vec / norm
-    return [float(x) for x in vec]
+def current_model() -> str:
+    return settings.embed_model if cloud.is_enabled() else HASH_MODEL
 
 
 def hash_embed(text: str, dim: int | None = None) -> list[float]:
@@ -37,28 +30,19 @@ def hash_embed(text: str, dim: int | None = None) -> list[float]:
         sign = 1.0 if digest[4] & 1 else -1.0
         weight = 2.0 if feature in words else 1.0
         vec[idx] += sign * weight
-    return _normalize(vec)
+    norm = float(np.linalg.norm(vec))
+    return [float(x) for x in (vec / norm if norm > 0 else vec)]
 
 
-@lru_cache
-def _bge():  # type: ignore[no-untyped-def]
-    from sentence_transformers import SentenceTransformer
-
-    return SentenceTransformer("BAAI/bge-m3", device="cpu")
-
-
-def embed_texts_sync(texts: list[str]) -> list[list[float]]:
-    if settings.embedding_provider == "bge":
-        vectors = _bge().encode(texts, normalize_embeddings=True)
-        return [_normalize(np.asarray(v)[: settings.embedding_dim]) for v in vectors]
-    return [hash_embed(t) for t in texts]
+async def embed_texts(texts: list[str]) -> tuple[list[list[float]], str]:
+    vectors = await cloud.embed_many(texts)
+    if vectors:
+        return vectors, settings.embed_model
+    return [hash_embed(t) for t in texts], HASH_MODEL
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    if settings.embedding_provider == "bge":
-        return await asyncio.to_thread(embed_texts_sync, texts)
-    return embed_texts_sync(texts)
-
-
-async def embed_query(text: str) -> list[float]:
-    return (await embed_texts([text]))[0]
+async def embed_query(text: str) -> tuple[list[float], str]:
+    vector = await cloud.embed_query(text)
+    if vector:
+        return vector, settings.embed_model
+    return hash_embed(text), HASH_MODEL

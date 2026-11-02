@@ -30,9 +30,11 @@ def _tenant(user_id: uuid.UUID):  # type: ignore[no-untyped-def]
 
 
 async def retrieve(s: AsyncSession, user_id: uuid.UUID, query: str, k: int = 5) -> list[Chunk]:
-    vector = await embed_query(query)
+    vector, model = await embed_query(query)
     base = select(Embedding).where(Embedding.entity_type.in_(RAG_TYPES), _tenant(user_id))
-    by_vector = list((await s.execute(base.order_by(Embedding.vector.cosine_distance(vector)).limit(20))).scalars())
+    # Only vectors from the same model can be compared.
+    same_model = base.where(Embedding.model == model)
+    by_vector = list((await s.execute(same_model.order_by(Embedding.vector.cosine_distance(vector)).limit(20))).scalars())
     tsv = func.to_tsvector("simple", func.coalesce(Embedding.chunk, ""))
     # OR of the words: only \w tokens reach to_tsquery, so its query syntax cannot be injected.
     words = [w for w in WORD.findall(query.lower()) if len(w) > 2]

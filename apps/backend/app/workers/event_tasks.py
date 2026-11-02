@@ -5,6 +5,8 @@ import structlog
 
 from app import models  # noqa: F401
 from app.ai.rag.ingest import delete_entity, upsert_entity
+from app.ai.safety.spam import FOLLOW_BURST
+from app.core.cache import get_redis
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.events import enqueue
@@ -83,6 +85,12 @@ async def _dispatch(name: str, d: dict[str, str]) -> None:
             if active:
                 await feed.invalidate_feed(follower)
             await notify(s, followee, "follow" if active else "follow_request", follower)
+            burst_key = f"spam:follows:{follower}"
+            follows_this_hour = await get_redis().incr(burst_key)
+            if follows_this_hour == 1:
+                await get_redis().expire(burst_key, 3600)
+            if follows_this_hour == FOLLOW_BURST:
+                await enqueue("users.score_spam", follower, follows_this_hour)
         elif name == "user.follow_accepted":
             follower, followee = uuid.UUID(d["follower_id"]), uuid.UUID(d["followee_id"])
             await feed.invalidate_feed(follower)

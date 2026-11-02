@@ -8,7 +8,8 @@ import { api, errorMessage } from "@/lib/api/client";
 
 const SCOPE_TEXT: Record<string, string> = {
   read: "See your profile, posts, insights and notifications",
-  "write:drafts": "Create drafts, schedule them with your confirmation, and file reports",
+  "write:drafts": "Create and change drafts, and ask to schedule them. You approve each one in the app.",
+  "write:reports": "File moderation reports for you",
 };
 
 function Consent() {

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import writing
 from app.ai.embeddings.search import is_enabled as semantic_enabled
+from app.ai.safety.moderation import is_hurtful
 from app.core.cache import get_redis
 from app.core.config import settings
 from app.core.errors import not_found
@@ -48,6 +49,14 @@ class HashtagsIn(BaseModel):
     text: str = Field(min_length=1, max_length=2200)
 
 
+class CommentCheckIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2200)
+
+
+class CommentCheckOut(BaseModel):
+    warn: bool
+
+
 class HashtagsOut(BaseModel):
     status: Literal["disabled", "ready", "failed"]
     hashtags: list[str] = []
@@ -80,6 +89,11 @@ async def _guard(user: User, name: str) -> None:
     await hit(f"{name}:user:{user.id}", 20, 3600)  # one person cannot keep the CPU busy
     if settings.ai_provider == "anthropic":
         await consume_quota(user)
+
+
+async def check_comment(user: User, data: CommentCheckIn) -> CommentCheckOut:
+    await hit(f"comment_check:user:{user.id}", 60, 60)
+    return CommentCheckOut(warn=await is_hurtful(data.text))
 
 
 async def rewrite(user: User, data: RewriteIn) -> RewriteOut:

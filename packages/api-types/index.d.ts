@@ -465,6 +465,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/interests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Interests */
+        get: operations["get_interests_api_v1_users_me_interests_get"];
+        /** Put Interests */
+        put: operations["put_interests_api_v1_users_me_interests_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/blocked": {
         parameters: {
             query?: never;
@@ -701,6 +719,58 @@ export interface paths {
         /** Create */
         post: operations["create_api_v1_posts_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posts/best-times": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Best Times */
+        get: operations["best_times_api_v1_posts_best_times_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posts/schedule-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Schedule Requests */
+        get: operations["schedule_requests_api_v1_posts_schedule_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posts/{post_id}/schedule-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Schedule Request */
+        post: operations["approve_schedule_request_api_v1_posts__post_id__schedule_request_post"];
+        /** Decline Schedule Request */
+        delete: operations["decline_schedule_request_api_v1_posts__post_id__schedule_request_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1028,6 +1098,23 @@ export interface paths {
         };
         /** Home */
         get: operations["home_api_v1_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feed/for-you": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** For You */
+        get: operations["for_you_api_v1_feed_for_you_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2132,6 +2219,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/comment-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comment Check */
+        post: operations["comment_check_api_v1_ai_comment_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/insights": {
         parameters: {
             query?: never;
@@ -2890,6 +2994,13 @@ export interface components {
              */
             is_demo: boolean;
         };
+        /** BestTimes */
+        BestTimes: {
+            /** Enough Data */
+            enough_data: boolean;
+            /** Hours */
+            hours: components["schemas"]["HourStat"][];
+        };
         /** CallCreate */
         CallCreate: {
             /**
@@ -2987,6 +3098,16 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /** CommentCheckIn */
+        CommentCheckIn: {
+            /** Text */
+            text: string;
+        };
+        /** CommentCheckOut */
+        CommentCheckOut: {
+            /** Warn */
+            warn: boolean;
         };
         /** CommentIn */
         CommentIn: {
@@ -3327,6 +3448,13 @@ export interface components {
             /** Stories */
             stories: components["schemas"]["StoryOut"][];
         };
+        /** HourStat */
+        HourStat: {
+            /** Hour */
+            hour: number;
+            /** Likes */
+            likes: number;
+        };
         /** ImageVariant */
         ImageVariant: {
             /** W */
@@ -3368,6 +3496,11 @@ export interface components {
             total_views: number;
             /** Posts Analysed */
             posts_analysed: number;
+        };
+        /** Interests */
+        Interests: {
+            /** Interests */
+            interests: string[];
         };
         /** LikeResult */
         LikeResult: {
@@ -4140,6 +4273,21 @@ export interface components {
         SaveIn: {
             /** Collection Id */
             collection_id?: string | null;
+        };
+        /** ScheduleRequest */
+        ScheduleRequest: {
+            /**
+             * Post Id
+             * Format: uuid
+             */
+            post_id: string;
+            /** Caption */
+            caption: string;
+            /**
+             * Publish At
+             * Format: date-time
+             */
+            publish_at: string;
         };
         /** SearchSuggest */
         SearchSuggest: {
@@ -5379,6 +5527,59 @@ export interface operations {
             };
         };
     };
+    get_interests_api_v1_users_me_interests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interests"];
+                };
+            };
+        };
+    };
+    put_interests_api_v1_users_me_interests_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Interests"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interests"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     blocked_api_v1_users_me_blocked_get: {
         parameters: {
             query?: never;
@@ -5862,6 +6063,117 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PostOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    best_times_api_v1_posts_best_times_get: {
+        parameters: {
+            query?: {
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BestTimes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    schedule_requests_api_v1_posts_schedule_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRequest"][];
+                };
+            };
+        };
+    };
+    approve_schedule_request_api_v1_posts__post_id__schedule_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_schedule_request_api_v1_posts__post_id__schedule_request_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6615,6 +6927,38 @@ export interface operations {
         };
     };
     home_api_v1_feed_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_PostOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    for_you_api_v1_feed_for_you_get: {
         parameters: {
             query?: {
                 cursor?: string | null;
@@ -8793,6 +9137,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HashtagsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comment_check_api_v1_ai_comment_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentCheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentCheckOut"];
                 };
             };
             /** @description Validation Error */

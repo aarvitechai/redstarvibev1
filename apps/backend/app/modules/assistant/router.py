@@ -33,6 +33,11 @@ async def hashtags(data: suggestions.HashtagsIn, me: CurrentUser) -> suggestions
     return await suggestions.hashtags(me, data)
 
 
+@router.post("/comment-check", response_model=suggestions.CommentCheckOut)
+async def comment_check(data: suggestions.CommentCheckIn, me: CurrentUser) -> suggestions.CommentCheckOut:
+    return await suggestions.check_comment(me, data)
+
+
 @router.get("/insights", response_model=service.InsightsOut)
 async def insights(me: CurrentUser, s: Db) -> service.InsightsOut:
     return await service.creator_insights(s, me)

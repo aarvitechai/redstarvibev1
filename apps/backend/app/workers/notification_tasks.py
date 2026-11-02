@@ -84,16 +84,24 @@ def live_started(host_id: str, room: str) -> None:
     run(_live_started(uuid.UUID(host_id), room))
 
 
-async def _score_spam(user_id: uuid.UUID) -> None:
-    from app.ai.safety.spam import spam_score
+async def _score_spam(user_id: uuid.UUID, follows_per_hour: float = 0.0) -> None:
+    from sqlalchemy import select
+
+    from app.ai.safety.spam import REVIEW_THRESHOLD, spam_score
+    from app.modules.moderation.models import Report
 
     async with SessionLocal() as s:
         user = await users.by_id(s, user_id)
-        if user:
-            user.spam_score = spam_score(user.username, user.email, user.profile.bio)
-            await s.commit()
+        if user is None:
+            return
+        user.spam_score = spam_score(user.username, user.email, user.profile.bio, follows_per_hour)
+        if user.spam_score >= REVIEW_THRESHOLD:
+            open_report = select(Report.id).where(Report.entity_id == user.id, Report.source == "ai", Report.status == "open")
+            if (await s.execute(open_report)).first() is None:
+                s.add(Report(entity_type="user", entity_id=user.id, reason="spam_signals", source="ai", score=user.spam_score))
+        await s.commit()
 
 
 @celery.task(name="users.score_spam")
-def score_spam(user_id: str) -> None:
-    run(_score_spam(uuid.UUID(user_id)))
+def score_spam(user_id: str, follows_per_hour: str = "0") -> None:
+    run(_score_spam(uuid.UUID(user_id), float(follows_per_hour)))

@@ -58,7 +58,7 @@ npx playwright test tests/e2e/admin.spec.ts --project=desktop-1280
 
 **Run `docker compose` from PowerShell on Windows, or with `MSYS_NO_PATHCONV=1` in Git Bash.** If you `export` `.env` in Git Bash first, it rewrites `MEDIA_PUBLIC_BASE=/rsv-public` to a Windows path and every image breaks. Post JSON cached in Redis keeps the bad URL for up to 10 minutes.
 
-Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `migrate` service applies them on `make up`. Alembic connects directly to Postgres through `MIGRATIONS_DATABASE_URL`.
+Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `migrate` service applies them on `make up`. Alembic connects directly to Postgres through `MIGRATIONS_DATABASE_URL`. After a migration that changes a column type, restart `pgbouncer`, or queries fail with `InvalidCachedStatementError` from stale plans.
 
 ## Architecture
 
@@ -83,7 +83,11 @@ Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `mi
 
 **Text on media:** `post_media.text_overlay` stores one text per photo or video as JSON, drawn by `TextOverlay.tsx` with percent positions and `cqw` font sizes. It is not burned into the pixels. Moderation and indexing must read `Post.full_text`, not `caption`.
 
-**Search:** `modules/search` merges `posts.search_tsv` (keyword) and `posts.embedding` (pgvector) with RRF in `ranking.py`. Visibility runs in SQL. Only anonymous results are cached. `ai.index_post` and the nightly `ai.backfill_search` fill the columns. Models run on Cloudflare Workers AI (`app/ai/workers_ai.py`), never on this machine. `AI_PROVIDER` chooses `none`, `cloudflare` or `anthropic`.
+**Search:** `modules/search` merges `posts.search_tsv` (keyword) and `posts.embedding` (pgvector) with RRF in `ranking.py`. Visibility runs in SQL. Only anonymous results are cached. `ai.index_post` and the nightly `ai.backfill_search` fill the columns. Models run on Cloudflare Workers AI (`app/ai/workers_ai.py`), never on this machine. `AI_PROVIDER` chooses `none`, `cloudflare` or `anthropic`. Explore has a For You tab (`/feed/for-you`) that merges the taste vector with hashtags from interests and likes, and falls back to Latest.
+
+**Assistant (RAG):** `app/ai/rag`. Chunks live in `embeddings` with an `owner_id` tenant filter in SQL. Each row records its model, and only vectors from one model are compared, because they fall back to `hash-v1` when Cloudflare is off or fails. `ai.backfill_search` re-embeds stale rows. Direct messages are never indexed.
+
+**MCP:** `app/mcp`. Tools call the service layer through `tools/handlers.py`. Writes create drafts only. `schedule_post` only asks: the person approves on the Create page, which an MCP token cannot reach. Text written by people is returned with a notice that it is untrusted.
 
 **Test data** (`app/modules/admin/test_data.py`): generated accounts carry `users.test_batch_id` and are removed only by batch. They publish directly, skipping moderation and notifications. Seed accounts are not batches. The large demo set (`demo_data.py`) also links to the `demo` and `owner` seed accounts. Only a super admin can disable or delete it. Disabling sets its users' status to `disabled`, and visibility rules do the rest. While it exists, `make test` fails with `demo_exists` and can leave it stuck, so run backend tests against a separate database.
 

@@ -7,12 +7,13 @@ from pathlib import Path
 
 import structlog
 from PIL import Image
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, String, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import models  # noqa: F401
 from app.ai.embeddings.search import embed_many, is_enabled
-from app.ai.rag.ingest import delete_entity, ingest_help_docs, upsert_entity
+from app.ai.models import Embedding
+from app.ai.rag.ingest import delete_entity, ingest_help_docs, reembed_stale, upsert_entity
 from app.ai.safety.moderation import moderate
 from app.ai.speech.whisper import transcribe_to_vtt
 from app.ai.writing import suggest_from_image
@@ -21,6 +22,7 @@ from app.core.database import SessionLocal
 from app.core.events import emit, enqueue
 from app.core.storage import internal
 from app.modules.assistant.suggestions import store_captions
+from app.modules.comments.models import Comment
 from app.modules.media import repository as media_repo
 from app.modules.moderation import repository as mod_repo
 from app.modules.moderation.models import Report
@@ -30,12 +32,14 @@ from app.modules.posts import service as posts
 from app.modules.posts.models import Post
 from app.modules.posts.service import extract_hashtags
 from app.modules.users import repository as users
+from app.modules.users.models import User
 from app.workers.celery_app import celery
 from app.workers.media_tasks import upload
 from app.workers.runtime import run
 
 log = structlog.get_logger()
 BACKFILL_BATCH = 200
+ASSISTANT_BATCH = 2000
 CAPTION_IMAGE_WIDTH = 480
 
 
@@ -89,7 +93,33 @@ async def pending_ids(limit: int) -> list[uuid.UUID]:
         return list((await s.execute(q)).scalars())
 
 
+async def _backfill_assistant() -> None:
+    """One bounded pass a night. Test accounts cannot log in to ask anything, so their posts are left out."""
+    indexed = exists().where(Embedding.entity_type == "own_post", Embedding.entity_id == cast(Post.id, String))
+    missing = (
+        select(Post.id).join(User, User.id == Post.author_id)
+        .where(Post.status == "published", Post.deleted_at.is_(None), User.test_batch_id.is_(None), ~indexed)
+        .limit(ASSISTANT_BATCH)
+    )
+    comment_indexed = exists().where(Embedding.entity_type == "own_comment", Embedding.entity_id == cast(Comment.id, String))
+    missing_comments = (
+        select(Comment).join(User, User.id == Comment.author_id)
+        .where(Comment.deleted_at.is_(None), User.test_batch_id.is_(None), ~comment_indexed).limit(ASSISTANT_BATCH)
+    )
+    async with SessionLocal() as s:
+        await reembed_stale(s, ASSISTANT_BATCH)
+        for post_id in list((await s.execute(missing)).scalars()):
+            post = await post_repo.get(s, post_id)
+            if post:
+                await _index_assistant(s, post)
+                await s.commit()
+        for comment in list((await s.execute(missing_comments)).scalars().unique()):
+            await upsert_entity(s, "own_comment", str(comment.id), comment.author_id, "Your comment", comment.body)
+            await s.commit()
+
+
 async def _backfill() -> None:
+    await _backfill_assistant()
     while ids := await pending_ids(BACKFILL_BATCH):
         if not await index_posts(ids):
             log.warning("search_backfill_stopped")  # the model is down, so the nightly run tries again

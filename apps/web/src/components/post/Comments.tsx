@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Avatar, Button, CenterSpinner, ErrorNote, Input } from "@/components/ui";
 import { useInfinite } from "@/hooks/useInfinite";
 import { api, errorMessage } from "@/lib/api/client";
-import type { Comment } from "@/lib/api/types";
+import type { Comment, CommentCheck } from "@/lib/api/types";
 import { timeAgo } from "@/lib/utils";
 import { Caption } from "./Caption";
 
@@ -78,11 +78,14 @@ export function Comments({ postId, isPostOwner }: { postId: string; isPostOwner?
   const list = useInfinite<Comment>(["comments", postId], `/posts/${postId}/comments`);
   const [body, setBody] = useState("");
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  const [warned, setWarned] = useState(false);
+  const [checking, setChecking] = useState(false);
   const send = useMutation({
     mutationFn: () => api<Comment>(`/posts/${postId}/comments`, { json: { body, parent_id: replyTo?.id ?? null } }),
     onSuccess: () => {
       setBody("");
       setReplyTo(null);
+      setWarned(false);
       qc.invalidateQueries({ queryKey: ["comments", postId] });
     },
   });
@@ -113,16 +116,32 @@ export function Comments({ postId, isPostOwner }: { postId: string; isPostOwner?
           </button>
         </p>
       )}
+      {warned && (
+        <p role="alert" data-testid="comment-nudge" className="mt-2 rounded-lg bg-surface p-2 text-xs">
+          This may hurt someone. Want to change it? You can still post it as it is.
+        </p>
+      )}
       <form
         className="flex gap-2 pt-2"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (body.trim()) send.mutate();
+          if (!body.trim()) return;
+          if (!warned) {
+            // The check only advises. If it fails, the comment still goes through.
+            setChecking(true);
+            const check = await api<CommentCheck>("/ai/comment-check", { json: { text: body } }).catch(() => null);
+            setChecking(false);
+            if (check?.warn) {
+              setWarned(true);
+              return;
+            }
+          }
+          send.mutate();
         }}
       >
-        <Input aria-label="Add a comment" placeholder="Add a comment" value={body} maxLength={2200} onChange={(e) => setBody(e.target.value)} />
-        <Button type="submit" loading={send.isPending} disabled={!body.trim()}>
-          Post
+        <Input aria-label="Add a comment" placeholder="Add a comment" value={body} maxLength={2200} onChange={(e) => { setBody(e.target.value); setWarned(false); }} />
+        <Button type="submit" loading={send.isPending || checking} disabled={!body.trim()}>
+          {warned ? "Post anyway" : "Post"}
         </Button>
       </form>
     </div>

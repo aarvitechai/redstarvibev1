@@ -43,6 +43,7 @@ class Profile(Base):
     avatar_key: Mapped[str | None] = mapped_column(Text)
     website: Mapped[str | None] = mapped_column(String(200))
     hidden_words: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    interests: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     user: Mapped[User] = relationship(back_populates="profile")
 
 

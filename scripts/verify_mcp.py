@@ -61,7 +61,15 @@ async def main() -> None:
                 await session.initialize()
                 tools = sorted(t.name for t in (await session.list_tools()).tools)
                 print("tools:", tools)
-                assert len(tools) == 7
+                assert len(tools) == 15
+                for name, args in (("list_drafts", {}), ("get_best_times", {"time_zone": "Asia/Kolkata"}), ("get_my_analytics", {}),
+                                   ("search_saved", {"query": "sunset"}), ("ask_vibe_ai", {"question": "How do I report a post?"})):
+                    result = await session.call_tool(name, args)
+                    assert not result.is_error, (name, result)
+                    print(name, "ok")
+                reported = await session.call_tool("report_content", {"entity_type": "user", "entity_id": "00000000-0000-0000-0000-000000000000", "reason": "spam"})
+                assert reported.is_error and "scope" in str(reported.content), reported
+                print("report_content refused without the write:reports scope")
                 profile = await session.call_tool("get_profile", {})
                 assert not profile.is_error and USERNAME in str(profile.content), profile
                 print("get_profile ok")

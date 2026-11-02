@@ -119,16 +119,21 @@ Extends the existing business page.
 
 Uses the existing `app/ai/llm_client.py` and the `ai` Celery queue.
 
-- [~] Semantic search with pgvector (hashed embeddings by default, BGE needs the `ai` build)
-- [~] Smart captions and hashtags from the photo (written, needs `ANTHROPIC_API_KEY` to run)
-- [~] Image search (find similar posts) (written, needs CLIP in the `ai` build)
+Full plan: `docs/RedStarVibe_AI_RAG_MCP_Feature_Plan.docx`. Models run on Cloudflare Workers AI or Claude, as `AI_PROVIDER` says.
+
+- [~] Semantic search with pgvector (written, needs Cloudflare keys, keyword search works without them)
+- [~] Smart captions and hashtags from the photo (written, needs a provider key to run)
+- [~] Similar posts (written, needs Cloudflare keys)
 - [ ] Auto tags and summary for posts
-- [~] Alt text for images (written with captions, needs `ANTHROPIC_API_KEY` to run)
-- [ ] Toxic comment warning before posting
+- [~] Alt text for images (written with captions, needs a provider key to run)
+- [x] Toxic comment warning before posting (word rules work, the model check needs a key)
+- [x] For You tab from interests and likes (semantic matching needs Cloudflare keys)
+- [x] Best time to post (plain statistics, no model)
+- [~] Image moderation on Cloudflare (written, never run on the real model)
 - [ ] Auto translation of comments
 - [ ] Fact-check labels
 - [~] Help chatbot (Vibe AI quotes sources, generated answers need `ANTHROPIC_API_KEY`)
-- [ ] Spam and fake account detection
+- [~] Spam and fake account detection (sign up and follow burst signals reach the staff queue, no automatic action)
 - [ ] Interest matching
 
 ## 9. New MCP tools (P2)
@@ -137,10 +142,11 @@ Add to the existing MCP server. Same role checks as the API.
 
 | Tool | Who | Example |
 |---|---|---|
-| `search_posts` | User, Admin | "Find my posts about Goa" |
-| `get_user_profile` | User, Admin | "How many followers do I have?" |
-| `read_comments` | User, Admin | "Summarize comments on my last post" |
-| `get_post_stats` | User | "Which was my most popular post last month?" |
+| `search_posts` (done) | User, Admin | "Find my posts about Goa" |
+| `get_profile` (done) | User, Admin | "How many followers do I have?" |
+| `read_comments` (done) | User, Admin | "Summarize comments on my last post" |
+| `get_my_analytics` (done) | User | "Which was my most popular post last month?" |
+| `get_best_times`, `list_drafts`, `search_saved`, `ask_vibe_ai`, `suggest_caption`, `update_draft` (done) | User | "When should I post this week?" |
 | `list_reported_posts` | Admin, Staff | "Which posts were reported today?" |
 | `get_bookings` | Business | "What bookings do I have this week?" |
 
@@ -180,7 +186,7 @@ Extends the current `user` / `admin` / `superadmin` roles.
 
 ## 12. Growth and account security (P2)
 
-- [ ] Choose interests at signup
+- [x] Choose interests (a card on the feed and Explore for new accounts)
 - [ ] Phone OTP login
 - [ ] Referral system with rewards
 - [ ] Invite links and QR codes

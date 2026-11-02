@@ -1,18 +1,22 @@
 """Home feed: precomputed in Redis (fan-out on write), celebrities merged on read, then ranked."""
+import time
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.ranking.ranker import rank_posts
+from app.ai.embeddings.search import embed_query, is_enabled
+from app.ai.ranking.ranker import rank_posts, taste_of
 from app.core.cache import get_redis
 from app.core.config import settings
 from app.core.pagination import Page, decode_cursor, encode_cursor, id_cursor
 from app.modules.feed import repository as repo
 from app.modules.posts import service as posts
 from app.modules.posts.schemas import PostOut
+from app.modules.search.ranking import merge
 from app.modules.users import repository as users
 from app.modules.users.models import User
 
+FOR_YOU_CANDIDATES = 200
 SENTINEL = "0"  # marks a built but empty feed, so fan-out knows the key is authoritative
 
 
@@ -66,9 +70,36 @@ async def explore(s: AsyncSession, viewer: User | None, cursor: str | None, limi
     ids = await repo.explore_ids(s, viewer.id if viewer else None, id_cursor(cursor), limit + 1)
     more = len(ids) > limit
     ids = ids[:limit]
-    items = await posts.hydrate(s, viewer, ids)
+    hidden = await users.limit_ids(s, viewer.id, "mute") if viewer else set()
+    items = [p for p in await posts.hydrate(s, viewer, ids) if p.author.id not in hidden]
     ranked = await rank_posts(s, viewer, items)
     return Page(items=ranked, next_cursor=encode_cursor(ids[-1]) if more else None)
+
+
+def _offset(cursor: str | None) -> int:
+    try:
+        return max(0, int(decode_cursor(cursor)[0])) if cursor else 0
+    except ValueError:
+        return 0
+
+
+async def for_you(s: AsyncSession, user: User, cursor: str | None, limit: int) -> Page[PostOut]:
+    """Taste vector and hashtags merged by rank. Works from interests or likes, with or without AI. Falls back to Explore."""
+    interests = await users.interests_of(s, user.id)
+    taste = await taste_of(s, user.id)
+    if taste is None and interests and is_enabled():
+        taste = await embed_query(" ".join(interests).lower())
+    tags = list(dict.fromkeys([*interests, *await repo.liked_tags(s, user.id)]))
+    hidden = await users.limit_ids(s, user.id, "mute")
+    nearest = await repo.for_you_nearest(s, user.id, taste, hidden, FOR_YOU_CANDIDATES) if taste else []
+    tagged = await repo.for_you_tagged(s, user.id, tags, hidden, FOR_YOU_CANDIDATES) if tags else []
+    ids = merge([nearest, tagged], int(time.time() * 1000))
+    if not ids:
+        return await explore(s, user, cursor, limit)
+    offset = _offset(cursor)
+    page = ids[offset:offset + limit]
+    next_cursor = encode_cursor(offset + limit) if len(ids) > offset + limit else None
+    return Page(items=await posts.hydrate(s, user, page), next_cursor=next_cursor)
 
 
 async def fan_out(post_id: uuid.UUID, follower_ids: list[uuid.UUID]) -> None:

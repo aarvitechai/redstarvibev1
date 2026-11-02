@@ -4,6 +4,8 @@ import { CheckCircle2, Circle, ImagePlus, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
+import { BestTimes } from "@/components/post/BestTimes";
+import { ScheduleRequests } from "@/components/post/ScheduleRequests";
 import { CaptionChips, ImproveCaption, MakeEffective, useAiFeatures, useCaptionSuggestions } from "@/components/post/AiWriting";
 import { frameRatio } from "@/components/post/MediaCarousel";
 import { MusicPicker, type TrackId } from "@/components/post/Music";
@@ -135,6 +137,7 @@ function NewPost() {
   return (
     <div className="mx-auto max-w-xl space-y-4 p-3 sm:p-4">
       <h1 className="text-xl font-bold">{isReel ? "New reel" : "New post"}</h1>
+      <ScheduleRequests />
       <label className="flex min-h-11 items-center gap-3 text-sm">
         <input type="checkbox" checked={isReel} disabled={items.length > 0} onChange={(e) => setIsReel(e.target.checked)} className="h-5 w-5 accent-[#C8102E]" />
         This is a reel: one vertical video up to 90 seconds
@@ -217,6 +220,7 @@ function NewPost() {
       <Field label="Schedule for later (optional)">
         <Input type="datetime-local" value={schedule} onChange={(e) => setSchedule(e.target.value)} />
       </Field>
+      <BestTimes onPick={setSchedule} />
       {schedule && (
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input type="checkbox" checked={capsule} onChange={(e) => setCapsule(e.target.checked)} className="h-5 w-5 accent-[#C8102E]" />

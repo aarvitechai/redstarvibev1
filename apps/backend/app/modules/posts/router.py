@@ -10,6 +10,7 @@ from app.core.rate_limit import client_ip
 from app.modules.posts import repository as repo
 from app.modules.posts import service
 from app.modules.posts.schemas import (
+    BestTimes,
     CollectionIn,
     CollectionOut,
     Insights,
@@ -18,6 +19,7 @@ from app.modules.posts.schemas import (
     PostOut,
     PostUpdate,
     SaveIn,
+    ScheduleRequest,
     ViewResult,
 )
 
@@ -32,6 +34,26 @@ async def create(
     data: PostCreate, me: CurrentUser, s: Db, idempotency_key: str | None = Header(None, max_length=100)
 ) -> PostOut:
     return await service.create_post(s, me, data, idempotency_key)
+
+
+@router.get("/posts/best-times", response_model=BestTimes)
+async def best_times(me: CurrentUser, s: Db, tz: str = Query("UTC", max_length=60)) -> BestTimes:
+    return await service.best_times(s, me, tz)
+
+
+@router.get("/posts/schedule-requests", response_model=list[ScheduleRequest])
+async def schedule_requests(me: CurrentUser, s: Db) -> list[ScheduleRequest]:
+    return await service.schedule_requests(s, me)
+
+
+@router.post("/posts/{post_id}/schedule-request", response_model=PostOut)
+async def approve_schedule_request(post_id: uuid.UUID, me: CurrentUser, s: Db) -> PostOut:
+    return await service.approve_schedule(s, me, post_id)
+
+
+@router.delete("/posts/{post_id}/schedule-request", status_code=204)
+async def decline_schedule_request(post_id: uuid.UUID, me: CurrentUser) -> None:
+    await service.decline_schedule(me, post_id)
 
 
 @router.get("/posts/drafts", response_model=list[PostOut])

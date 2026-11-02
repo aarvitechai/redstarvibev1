@@ -1,13 +1,14 @@
 import uuid
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.models import Embedding
 from app.modules.follows.models import Follow
-from app.modules.posts.models import Like, Post, PostCollab
+from app.modules.posts.models import Like, Post, PostCollab, PostHashtag
 from app.modules.posts.repository import visible_clause
 from app.modules.users.models import User
+
+FOR_YOU_MAX_DISTANCE = 0.75  # cosine distance. Beyond this, a post has little to do with the person's taste.
 
 
 async def recent_for_rebuild(s: AsyncSession, user_id: uuid.UUID, limit: int) -> list[uuid.UUID]:
@@ -65,16 +66,51 @@ async def author_affinity(s: AsyncSession, user_id: uuid.UUID) -> dict[uuid.UUID
 
 async def liked_vectors(s: AsyncSession, user_id: uuid.UUID, limit: int = 50) -> list[list[float]]:
     recent = select(Like.post_id).where(Like.user_id == user_id).order_by(Like.created_at.desc()).limit(limit).subquery()
-    q = select(Embedding.vector).join(recent, Embedding.entity_id == recent.c.post_id.cast(Embedding.entity_id.type)).where(
-        Embedding.entity_type == "post"
-    )
-    return [list(v) for v in (await s.execute(q)).scalars()]
+    q = select(Post.embedding).join(recent, Post.id == recent.c.post_id).where(Post.embedding.is_not(None))
+    return [[float(x) for x in v] for v in (await s.execute(q)).scalars()]
 
 
 async def post_vectors(s: AsyncSession, ids: list[uuid.UUID]) -> dict[str, list[float]]:
     if not ids:
         return {}
-    q = select(Embedding.entity_id, Embedding.vector).where(
-        Embedding.entity_type == "post", Embedding.entity_id.in_([str(i) for i in ids])
+    q = select(Post.id, Post.embedding).where(Post.id.in_(ids), Post.embedding.is_not(None))
+    return {str(a): [float(x) for x in b] for a, b in (await s.execute(q)).all()}
+
+
+async def liked_tags(s: AsyncSession, user_id: uuid.UUID, limit: int = 10) -> list[str]:
+    recent = select(Like.post_id).where(Like.user_id == user_id).order_by(Like.created_at.desc()).limit(200).subquery()
+    q = (
+        select(PostHashtag.tag).join(recent, PostHashtag.post_id == recent.c.post_id)
+        .group_by(PostHashtag.tag).order_by(func.count().desc()).limit(limit)
     )
-    return {a: list(b) for a, b in (await s.execute(q)).all()}
+    return [str(t) for t in (await s.execute(q)).scalars()]
+
+
+def _for_you_base(viewer: uuid.UUID, hidden: set[uuid.UUID]):  # type: ignore[no-untyped-def]
+    """Public posts from people the viewer does not follow, not yet liked, and never from anyone they muted."""
+    followed = select(Follow.followee_id).where(Follow.follower_id == viewer)
+    liked = select(Like.post_id).where(Like.user_id == viewer)
+    q = (
+        select(Post.id).join(User, User.id == Post.author_id)
+        .where(
+            visible_clause(viewer), Post.visibility == "public", User.is_private.is_(False), Post.author_id != viewer,
+            Post.author_id.not_in(followed), Post.id.not_in(liked),
+        )
+    )
+    return q.where(Post.author_id.not_in(hidden)) if hidden else q
+
+
+async def for_you_nearest(
+    s: AsyncSession, viewer: uuid.UUID, taste: list[float], hidden: set[uuid.UUID], limit: int
+) -> list[uuid.UUID]:
+    distance = Post.embedding.cosine_distance(taste)
+    q = _for_you_base(viewer, hidden).where(Post.embedding.is_not(None), distance < FOR_YOU_MAX_DISTANCE).order_by(distance)
+    return list((await s.execute(q.limit(limit))).scalars())
+
+
+async def for_you_tagged(
+    s: AsyncSession, viewer: uuid.UUID, tags: list[str], hidden: set[uuid.UUID], limit: int
+) -> list[uuid.UUID]:
+    tagged = select(PostHashtag.post_id).where(PostHashtag.tag.in_(tags))
+    q = _for_you_base(viewer, hidden).where(Post.id.in_(tagged)).order_by(Post.engagement_score.desc(), Post.id.desc())
+    return list((await s.execute(q.limit(limit))).scalars())

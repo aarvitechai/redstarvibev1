@@ -2,6 +2,9 @@
 import math
 import re
 
+REVIEW_THRESHOLD = 0.35  # sends an account to staff. Nothing is banned automatically.
+FOLLOW_BURST = 100  # follows in one hour
+
 
 def spam_score(username: str, email: str, bio: str, follows_per_hour: float = 0.0) -> float:
     digits = sum(c.isdigit() for c in username) / max(len(username), 1)

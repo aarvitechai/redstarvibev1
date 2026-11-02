@@ -13,6 +13,11 @@ async def home(me: CurrentUser, s: Db, cursor: str | None = None, limit: int = Q
     return await service.home_feed(s, me, cursor, limit)
 
 
+@router.get("/feed/for-you", response_model=Page[PostOut])
+async def for_you(me: CurrentUser, s: Db, cursor: str | None = None, limit: int = Query(24, ge=1, le=48)) -> Page[PostOut]:
+    return await service.for_you(s, me, cursor, limit)
+
+
 @router.get("/explore", response_model=Page[PostOut])
 async def explore(
     viewer: OptionalUser, s: Db, cursor: str | None = None, limit: int = Query(24, ge=1, le=48)

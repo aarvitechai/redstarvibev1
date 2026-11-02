@@ -32,13 +32,14 @@ const TEXT: Record<string, string> = {
   live: "started a live video",
   post_failed: "Your post could not be published.",
   post_published: "Your post is live.",
+  mcp_schedule: "A connected AI app wants to schedule a post. Approve it on the Create page.",
 };
 
 function hrefFor(n: Notification): string {
   if (["like", "comment", "mention", "tagged", "new_post", "post_published", "collab_invite", "collab_accepted"].includes(n.type) && n.entity_id) return `/p/${n.entity_id}`;
   if ((n.type === "message" || n.type === "message_request") && n.entity_id) return `/messages/${n.entity_id}`;
   if (n.type === "live") return "/live";
-  if (n.type === "post_failed") return "/new";
+  if (n.type === "post_failed" || n.type === "mcp_schedule") return "/new";
   if (n.type.startsWith("ticket_")) return "/support";
   if (n.type.startsWith("verification_")) return "/support";
   if (n.type.startsWith("ad_")) return "/business-tools";

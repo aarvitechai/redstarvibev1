@@ -56,6 +56,22 @@ class PostOut(BaseModel):
     is_own: bool = False
 
 
+class HourStat(BaseModel):
+    hour: int
+    likes: int
+
+
+class BestTimes(BaseModel):
+    enough_data: bool
+    hours: list[HourStat]
+
+
+class ScheduleRequest(BaseModel):
+    post_id: uuid.UUID
+    caption: str
+    publish_at: datetime
+
+
 class LikeResult(BaseModel):
     liked: bool
     like_count: int

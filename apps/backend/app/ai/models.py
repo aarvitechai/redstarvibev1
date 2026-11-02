@@ -12,11 +12,11 @@ from app.core.ids import uuid7
 
 
 class Embedding(Base):
-    """Vectors for posts and RAG chunks. owner_id is the tenant filter applied at query time."""
+    """Vectors for RAG chunks. Post search vectors live on posts.embedding. owner_id is the tenant filter at query time."""
 
     __tablename__ = "embeddings"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
-    entity_type: Mapped[str] = mapped_column(String(20))  # post post_image help own_post own_comment
+    entity_type: Mapped[str] = mapped_column(String(20))  # help own_post own_comment
     entity_id: Mapped[str] = mapped_column(String(120))
     owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # null: public (help docs)
     chunk: Mapped[str | None] = mapped_column(Text)

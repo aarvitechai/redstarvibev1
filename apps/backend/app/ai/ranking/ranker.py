@@ -38,6 +38,10 @@ async def _signals(s: AsyncSession, user_id: uuid.UUID) -> tuple[dict[str, int],
     return affinity, taste
 
 
+async def taste_of(s: AsyncSession, user_id: uuid.UUID) -> list[float] | None:
+    return (await _signals(s, user_id))[1]
+
+
 async def rank_posts(s: AsyncSession, viewer: User | None, posts: list[PostOut]) -> list[PostOut]:
     """Reorders within the page only, so cursor pagination stays stable."""
     if len(posts) < 2:
