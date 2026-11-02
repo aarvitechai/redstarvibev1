@@ -57,7 +57,7 @@ class InsightsOut(BaseModel):
     posts_analysed: int
 
 
-async def _consume_quota(user: User) -> None:
+async def consume_quota(user: User) -> None:
     """Per user AI quota. Cost is tracked through ai_output_log."""
     key = f"ai:quota:{user.id}:{date.today().isoformat()}"
     client = get_redis()
@@ -68,7 +68,7 @@ async def _consume_quota(user: User) -> None:
 
 
 async def ask(s: AsyncSession, user: User, question: str) -> AskOut:
-    await _consume_quota(user)
+    await consume_quota(user)
     result = await answer(s, user.id, question)
     await log_ai(s, "assistant", None, user.id, result.model, result.text, {"question": redact(question)})
     await s.commit()
@@ -87,7 +87,7 @@ async def suggest_caption(s: AsyncSession, user: User, asset_id: uuid.UUID) -> C
         raise not_found("Upload")
     if not llm_client.is_configured():
         raise AppError(503, "ai_not_configured", "Auto captions need ANTHROPIC_API_KEY to be set on the server")
-    await _consume_quota(user)
+    await consume_quota(user)
     if asset.status != "ready" or not asset.variants:
         raise AppError(409, "media_not_ready", "That upload is still processing")
     key = asset.variants.get("poster") or asset.variants["images"][-1]["webp"]
@@ -114,7 +114,7 @@ async def creator_insights(s: AsyncSession, user: User) -> InsightsOut:
             summary=base, llm_used=False, total_likes=likes, total_comments=comments,
             total_views=views, posts_analysed=len(items),
         )
-    await _consume_quota(user)
+    await consume_quota(user)
     table = "\n".join(
         f"- likes={p.like_count} comments={p.comment_count} views={p.view_count} caption={redact(p.caption[:120])!r}"
         for p in items

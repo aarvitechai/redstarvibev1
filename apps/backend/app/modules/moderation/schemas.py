@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class ReportIn(BaseModel):
-    entity_type: Literal["post", "comment", "user", "story", "message"]
+    entity_type: Literal["post", "comment", "user", "story", "message", "community"]
     entity_id: uuid.UUID
     reason: Literal["spam", "harassment", "hate", "violence", "nudity", "child_safety", "self_harm", "other"]
     details: str | None = Field(None, max_length=1000)

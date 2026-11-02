@@ -23,6 +23,11 @@ async def create(post_id: uuid.UUID, data: CommentIn, me: CurrentUser, s: Db) ->
     return await service.create(s, me, post_id, data)
 
 
+@router.post("/comments/{comment_id}/approve", status_code=204)
+async def approve(comment_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.approve(s, me, comment_id)
+
+
 @router.delete("/comments/{comment_id}", status_code=204)
 async def delete(comment_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
     await service.delete(s, me, comment_id)

@@ -53,7 +53,7 @@ async def home_feed(s: AsyncSession, user: User, cursor: str | None, limit: int)
     more = len(ids) > limit
     ids = ids[:limit]
 
-    blocked = await users.blocked_ids(s, user.id)
+    blocked = await users.blocked_ids(s, user.id) | await users.limit_ids(s, user.id, "mute")
     items = [
         p for p in await posts.hydrate(s, user, ids)
         if p.status == "published" and p.author.id not in blocked

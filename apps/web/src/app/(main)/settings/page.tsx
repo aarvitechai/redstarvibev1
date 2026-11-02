@@ -86,6 +86,56 @@ function InstallApp() {
   return <Button variant="secondary" onClick={() => prompt.current?.prompt()}>Install RedStarVibe</Button>;
 }
 
+function HiddenWords() {
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const toast = useUi((s) => s.showToast);
+  const [text, setText] = useState("");
+  useEffect(() => setText((me?.hidden_words ?? []).join(", ")), [me?.hidden_words]);
+  const save = useMutation({
+    mutationFn: () => api("/users/me", { method: "PATCH", json: { hidden_words: text.split(",") } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] });
+      toast("Saved");
+    },
+  });
+  return (
+    <>
+      <Field label="Words to hide, separated by commas">
+        <textarea value={text} rows={2} onChange={(e) => setText(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-3 text-[16px] focus:border-brand focus:outline-none sm:text-sm" />
+      </Field>
+      <p className="text-xs text-muted">New comments on your posts with these words stay hidden from others until you allow them.</p>
+      <ErrorNote message={save.error ? errorMessage(save.error) : null} />
+      <Button variant="secondary" loading={save.isPending} onClick={() => save.mutate()}>Save hidden words</Button>
+    </>
+  );
+}
+
+function CloseFriends() {
+  const [username, setUsername] = useState("");
+  const list = useQuery({ queryKey: ["close-friends"], queryFn: () => api<UserBrief[]>("/close-friends") });
+  const add = useMutation({
+    mutationFn: () => api("/close-friends", { json: { username } }),
+    onSuccess: () => {
+      setUsername("");
+      list.refetch();
+    },
+  });
+  return (
+    <>
+      <p className="text-xs text-muted">Only these people see stories you share with close friends. They are not told they are on the list.</p>
+      <div className="flex gap-2">
+        <Input aria-label="Close friend username" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <Button variant="secondary" disabled={!username.trim()} loading={add.isPending} onClick={() => add.mutate()}>Add</Button>
+      </div>
+      <ErrorNote message={add.error ? errorMessage(add.error) : null} />
+      {list.data?.map((u) => (
+        <UserRow key={u.id} user={u} action={<Button variant="secondary" onClick={async () => { await api(`/close-friends/${u.id}`, { method: "DELETE" }); list.refetch(); }}>Remove</Button>} />
+      ))}
+    </>
+  );
+}
+
 function Mfa() {
   const { data: me } = useMe();
   const qc = useQueryClient();
@@ -139,6 +189,8 @@ export default function SettingsPage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const blocked = useQuery({ queryKey: ["blocked"], queryFn: () => api<UserBrief[]>("/users/me/blocked") });
+  const muted = useQuery({ queryKey: ["muted"], queryFn: () => api<UserBrief[]>("/users/me/muted") });
+  const restricted = useQuery({ queryKey: ["restricted"], queryFn: () => api<UserBrief[]>("/users/me/restricted") });
 
   useEffect(() => {
     if (!me) return;
@@ -228,6 +280,22 @@ export default function SettingsPage() {
         <InstallApp />
       </Section>
       <Section title="Security"><Mfa /></Section>
+      <Section title="Close friends"><CloseFriends /></Section>
+      <Section title="Hidden words"><HiddenWords /></Section>
+      {!!muted.data?.length && (
+        <Section title="Muted accounts">
+          {muted.data.map((u) => (
+            <UserRow key={u.id} user={u} action={<Button variant="secondary" onClick={async () => { await api(`/users/${u.username}/mute`, { method: "DELETE" }); muted.refetch(); }}>Unmute</Button>} />
+          ))}
+        </Section>
+      )}
+      {!!restricted.data?.length && (
+        <Section title="Restricted accounts">
+          {restricted.data.map((u) => (
+            <UserRow key={u.id} user={u} action={<Button variant="secondary" onClick={async () => { await api(`/users/${u.username}/restrict`, { method: "DELETE" }); restricted.refetch(); }}>Remove</Button>} />
+          ))}
+        </Section>
+      )}
       {!!blocked.data?.length && (
         <Section title="Blocked accounts">
           {blocked.data.map((u) => (

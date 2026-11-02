@@ -54,6 +54,11 @@ def sniff(head: bytes) -> str | None:
     return None
 
 
+def audio_container_ok(head: bytes) -> bool:
+    """WebM and MP4 can hold video too, so `process_audio` still refuses any file with a real video track."""
+    return head[:4] == b"OggS" or head[:4] == b"\x1a\x45\xdf\xa3" or head[4:8] == b"ftyp" and sniff(head) == "video"
+
+
 def clamav_clean(path: Path) -> bool:
     """clamd INSTREAM. Scanning is skipped only when CLAMAV_HOST is not configured."""
     if not settings.clamav_host:
@@ -116,6 +121,26 @@ def probe(path: Path) -> dict[str, Any]:
         raise Rejected("That video could not be read")
     data: dict[str, Any] = json.loads(res.stdout)
     return data
+
+
+def process_audio(path: Path, work: Path, asset_id: str) -> dict[str, Any]:
+    """Voice notes become AAC, which every browser plays. Re-encoding also drops metadata."""
+    streams = probe(path).get("streams", [])
+    if any(x.get("codec_type") == "video" for x in streams) or not any(x.get("codec_type") == "audio" for x in streams):
+        raise Rejected("That file is not a voice note")
+    out = work / "voice.m4a"
+    cmd = [
+        "ffmpeg", "-y", "-v", "error", "-i", str(path), "-map", "0:a:0", "-map_metadata", "-1", "-c:a", "aac", "-b:a", "64k",
+        "-t", str(settings.max_voice_seconds + 1), "-movflags", "+faststart", str(out),
+    ]
+    if _run(cmd, 300).returncode != 0:
+        raise Rejected("That voice note could not be read")
+    duration = float(probe(out).get("format", {}).get("duration") or 0)  # recordings from browsers often have none
+    if duration > settings.max_voice_seconds:
+        raise Rejected(f"That voice note is too long. The limit is {settings.max_voice_seconds} seconds.")
+    key = f"{asset_id}/voice.m4a"
+    upload(out, key, "audio/mp4")
+    return {"width": None, "height": None, "duration": duration, "placeholder": None, "variants": {"audio": key}}
 
 
 def process_video(path: Path, work: Path, asset_id: str, purpose: str) -> dict[str, Any]:
@@ -213,12 +238,12 @@ async def _process(s: Any, asset: MediaAsset, work: Path) -> None:
     store = internal()
     store.download_file(settings.s3_raw_bucket, asset.raw_key, str(raw))
     size = raw.stat().st_size
-    limit = settings.max_image_bytes if asset.kind == "image" else settings.max_video_bytes
+    limit = {"image": settings.max_image_bytes, "audio": settings.max_audio_bytes}.get(asset.kind, settings.max_video_bytes)
     if size > limit or size != asset.size_bytes:
         raise Rejected("The file size does not match the upload")
     with raw.open("rb") as handle:
         head = handle.read(32)
-    if sniff(head) != asset.kind:
+    if not (audio_container_ok(head) if asset.kind == "audio" else sniff(head) == asset.kind):
         raise Rejected("The file content does not match its type")
     digest = hashlib.sha256()
     with raw.open("rb") as handle:
@@ -233,6 +258,8 @@ async def _process(s: Any, asset: MediaAsset, work: Path) -> None:
         raise Rejected("This file failed a security scan")
     if asset.kind == "image":
         result = process_image(raw, work, str(asset.id))
+    elif asset.kind == "audio":
+        result = process_audio(raw, work, str(asset.id))
     else:
         result = process_video(raw, work, str(asset.id), asset.purpose)
     asset.width, asset.height, asset.duration = result["width"], result["height"], result["duration"]

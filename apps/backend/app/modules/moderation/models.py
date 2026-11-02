@@ -22,6 +22,9 @@ class Report(Base):
     source: Mapped[str] = mapped_column(String(8), default="user")  # user ai
     score: Mapped[float | None] = mapped_column(Float)
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    escalated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Flag, Grid3x3, Lock, MessageCircle, MoreHorizontal, Film } from "lucide-react";
+import { BadgeCheck, Ban, Flag, Grid3x3, Hourglass, Lock, MessageCircle, MoreHorizontal, Film, ShieldAlert, Tag, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +10,7 @@ import { StoryViewer } from "@/components/story/StoryViewer";
 import { Avatar, Button, CenterSpinner, Empty, Modal, UserRow } from "@/components/ui";
 import { useInfinite } from "@/hooks/useInfinite";
 import { api, ApiError, errorMessage } from "@/lib/api/client";
-import type { Conversation, Highlight, Profile, Story, UserBrief } from "@/lib/api/types";
+import type { CapsuleTeaser, Conversation, Highlight, Profile, Story, UserBrief } from "@/lib/api/types";
 import { compactNumber, cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
 
@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const toast = useUi((s) => s.showToast);
   const [people, setPeople] = useState<"followers" | "following" | null>(null);
-  const [tab, setTab] = useState<"posts" | "reels">("posts");
+  const [tab, setTab] = useState<"posts" | "reels" | "tagged">("posts");
   const [menu, setMenu] = useState(false);
   const [report, setReport] = useState(false);
   const [stories, setStories] = useState<Story[] | null>(null);
@@ -41,6 +41,7 @@ export default function ProfilePage() {
   const p = profile.data;
   const highlights = useQuery({ queryKey: ["highlights", username], enabled: !!p?.can_view_posts, queryFn: () => api<Highlight[]>(`/users/${username}/highlights`) });
 
+  const capsules = useQuery({ queryKey: ["capsules", username], enabled: !!p?.can_view_posts, queryFn: () => api<CapsuleTeaser>(`/users/${username}/capsules`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["profile", username] });
   const follow = useMutation({
     mutationFn: () => api(`/users/${username}/follow`, { method: p?.follow_status ? "DELETE" : "POST" }),
@@ -77,6 +78,7 @@ export default function ProfilePage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="truncate text-xl font-bold">{p.username}</h1>
+              {p.verified && <BadgeCheck aria-label="Verified" className="h-5 w-5 shrink-0 text-brand" />}
               {!p.is_self && (
                 <button aria-label="More options" onClick={() => setMenu(true)} className="flex h-11 w-11 items-center justify-center">
                   <MoreHorizontal className="h-5 w-5" />
@@ -95,6 +97,12 @@ export default function ProfilePage() {
           {p.bio && <p className="whitespace-pre-wrap break-words">{p.bio}</p>}
           {p.website && <a href={p.website} rel="noopener noreferrer nofollow ugc" target="_blank" className="break-all font-medium text-brand">{p.website.replace(/^https?:\/\//, "")}</a>}
         </div>
+        {!!capsules.data?.count && (
+          <p className="mt-2 flex items-center gap-1 text-xs text-muted" data-testid="capsule-teaser">
+            <Hourglass aria-hidden className="h-3.5 w-3.5" />
+            {capsules.data.count} sealed time {capsules.data.count === 1 ? "capsule" : "capsules"}, next opens {new Date(capsules.data.next_unlock_at!).toLocaleDateString()}
+          </p>
+        )}
         <div className="mt-3 flex gap-2">
           {p.is_self ? (
             <Link href="/settings" className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-surface text-sm font-semibold hover:bg-line">Edit profile</Link>
@@ -128,13 +136,13 @@ export default function ProfilePage() {
       {p.can_view_posts ? (
         <>
           <div role="tablist" className="flex border-t border-line">
-            {([["posts", Grid3x3, "Posts"], ["reels", Film, "Reels"]] as const).map(([value, Icon, label]) => (
+            {([["posts", Grid3x3, "Posts"], ["reels", Film, "Reels"], ["tagged", Tag, "Tagged"]] as const).map(([value, Icon, label]) => (
               <button key={value} role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={cn("flex min-h-11 flex-1 items-center justify-center gap-2 text-sm font-semibold", tab === value ? "border-t-2 border-brand text-brand" : "text-muted")}>
                 <Icon className="h-4 w-4" /> {label}
               </button>
             ))}
           </div>
-          <InfiniteGrid key={tab} queryKey={["user-posts", username, tab]} path={`/users/${username}/posts${tab === "reels" ? "?reels=true" : ""}`} emptyTitle={tab === "reels" ? "No reels yet" : "No posts yet"} />
+          <InfiniteGrid key={tab} queryKey={["user-posts", username, tab]} path={tab === "tagged" ? `/users/${username}/tagged` : `/users/${username}/posts${tab === "reels" ? "?reels=true" : ""}`} emptyTitle={tab === "reels" ? "No reels yet" : tab === "tagged" ? "No tagged posts yet" : "No posts yet"} />
         </>
       ) : (
         <div className="border-t border-line">
@@ -145,6 +153,29 @@ export default function ProfilePage() {
       {people && <People username={username} kind={people} onClose={() => setPeople(null)} />}
       {stories && <StoryViewer stories={stories} ownerIsMe={p.is_self} onClose={() => setStories(null)} />}
       <Modal open={menu} onClose={() => setMenu(false)} title={p.username}>
+        <button
+          className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 hover:bg-surface"
+          onClick={async () => {
+            await api(`/users/${username}/mute`, { method: p.is_muted ? "DELETE" : "POST" });
+            setMenu(false);
+            toast(p.is_muted ? `Unmuted ${username}` : `Muted ${username}. They will not be told.`);
+            refresh();
+            qc.invalidateQueries({ queryKey: ["feed"] });
+          }}
+        >
+          <VolumeX className="h-4 w-4" /> {p.is_muted ? "Unmute" : "Mute"}
+        </button>
+        <button
+          className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 hover:bg-surface"
+          onClick={async () => {
+            await api(`/users/${username}/restrict`, { method: p.is_restricted ? "DELETE" : "POST" });
+            setMenu(false);
+            toast(p.is_restricted ? `Removed restriction on ${username}` : `Restricted ${username}. New comments stay hidden until you allow them.`);
+            refresh();
+          }}
+        >
+          <ShieldAlert className="h-4 w-4" /> {p.is_restricted ? "Remove restriction" : "Restrict"}
+        </button>
         <button className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-brand hover:bg-surface" onClick={() => { setMenu(false); setReport(true); }}>
           <Flag className="h-4 w-4" /> Report account
         </button>

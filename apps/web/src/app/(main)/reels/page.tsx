@@ -1,7 +1,8 @@
 "use client";
-import { Heart, MessageCircle } from "lucide-react";
+import { Eye, Heart, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { editStyle } from "@/components/post/mediaEdit";
 import { TextOverlayView } from "@/components/post/TextOverlay";
 import { VideoPlayer } from "@/components/post/VideoPlayer";
 import { Avatar, CenterSpinner, Empty } from "@/components/ui";
@@ -13,14 +14,19 @@ import { cn, compactNumber } from "@/lib/utils";
 function Reel({ post }: { post: Post }) {
   const [liked, setLiked] = useState(post.liked);
   const [likes, setLikes] = useState(post.like_count);
+  const [views, setViews] = useState(post.view_count);
   const media = post.media[0];
   const onView = useCallback(() => {
-    api(`/posts/${post.id}/view`, { method: "POST" }).catch(() => undefined);
+    api<{ view_count: number }>(`/posts/${post.id}/view`, { method: "POST" })
+      .then((r) => setViews(r.view_count))
+      .catch(() => undefined);
   }, [post.id]);
   if (!media) return null;
   return (
     <section className="relative h-[calc(100dvh-7rem)] snap-start snap-always bg-black sm:h-dvh">
-      <VideoPlayer asset={media} onView={onView} className="h-full w-full object-contain" />
+      <div className="h-full w-full" style={editStyle(media.edit)}>
+        <VideoPlayer asset={media} onView={onView} className="h-full w-full object-contain" />
+      </div>
       <TextOverlayView overlay={media.text_overlay} />
       <div className="absolute bottom-16 left-3 right-16 text-white drop-shadow">
         <Link href={`/${post.author.username}`} className="flex items-center gap-2 font-semibold">
@@ -46,6 +52,8 @@ function Reel({ post }: { post: Post }) {
           <MessageCircle className="h-7 w-7" />
         </Link>
         <span className="text-xs">{compactNumber(post.comment_count)}</span>
+        <Eye aria-hidden className="mt-2 h-6 w-6" />
+        <span className="text-xs" aria-label={`${views} views`}>{compactNumber(views)}</span>
       </div>
     </section>
   );

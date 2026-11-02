@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 import { frameRatio } from "@/components/post/MediaCarousel";
+import { isEdited } from "@/components/post/mediaEdit";
 import { TextOverlayEditor } from "@/components/post/TextOverlayEditor";
 import { Button, ErrorNote, Field, Input, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api/client";
-import type { CaptionOut, Post, TextOverlay } from "@/lib/api/types";
+import type { CaptionOut, MediaEdit, Post, TextOverlay } from "@/lib/api/types";
 import { uploadAsset } from "@/lib/api/upload";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
@@ -23,6 +24,7 @@ type Item = {
   width?: number | null;
   height?: number | null;
   overlay?: TextOverlay;
+  edit?: MediaEdit;
 };
 
 const REEL_RATIO = 9 / 16;
@@ -36,6 +38,9 @@ function NewPost() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [location, setLocation] = useState("");
+  const [tags, setTags] = useState("");
+  const [collab, setCollab] = useState("");
+  const [capsule, setCapsule] = useState(false);
   const [visibility, setVisibility] = useState("public");
   const [schedule, setSchedule] = useState("");
   const [altText, setAltText] = useState("");
@@ -78,16 +83,24 @@ function NewPost() {
           draft,
           scheduled_at: !draft && schedule ? new Date(schedule).toISOString() : null,
           alt_texts: altText ? [altText] : null,
+          tagged_usernames: tags.split(/[\s,]+/).filter(Boolean),
+          collab_username: collab.trim() || null,
+          is_capsule: capsule && !draft,
+          media_edits: items.map((i) => (isEdited(i.edit) ? i.edit : null)),
           text_overlays: items.map((i) => (i.overlay?.text.trim() ? i.overlay : null)),
         },
         headers: { "Idempotency-Key": idempotency.current },
       }),
     onSuccess: (post, draft) => {
-      toast(draft ? "Saved to drafts" : schedule ? "Scheduled" : "Publishing your post");
+      toast(draft ? "Saved to drafts" : capsule && schedule ? "Time capsule sealed" : schedule ? "Scheduled" : "Publishing your post");
       router.push(draft || schedule ? "/new" : `/p/${post.id}`);
       if (draft || schedule) {
         setItems([]);
         setCaption("");
+        setTags("");
+        setCollab("");
+        setCapsule(false);
+        setSchedule("");
         idempotency.current = crypto.randomUUID();
         drafts.refetch();
       }
@@ -155,6 +168,8 @@ function NewPost() {
           ratio={isReel ? REEL_RATIO : frameRatio(items[0]?.width, items[0]?.height)}
           value={selected.overlay}
           onChange={(overlay) => setOverlay(selected.key, overlay)}
+          edit={selected.edit}
+          onEditChange={(edit) => setItems((list) => list.map((i) => (i.key === selected.key ? { ...i, edit } : i)))}
         />
       )}
       <Field label="Caption">
@@ -166,6 +181,12 @@ function NewPost() {
       </Button>
       <Field label="Image description for screen readers">
         <Input value={altText} maxLength={500} onChange={(e) => setAltText(e.target.value)} />
+      </Field>
+      <Field label="Tag people">
+        <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="@asha, @kabir" autoCapitalize="none" />
+      </Field>
+      <Field label="Invite a collaborator (optional)">
+        <Input value={collab} onChange={(e) => setCollab(e.target.value)} placeholder="@username" autoCapitalize="none" />
       </Field>
       <Field label="Location">
         <Input value={location} maxLength={120} onChange={(e) => setLocation(e.target.value)} placeholder="Add a place" />
@@ -179,10 +200,16 @@ function NewPost() {
       <Field label="Schedule for later (optional)">
         <Input type="datetime-local" value={schedule} onChange={(e) => setSchedule(e.target.value)} />
       </Field>
+      {schedule && (
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input type="checkbox" checked={capsule} onChange={(e) => setCapsule(e.target.checked)} className="h-5 w-5 accent-[#C8102E]" />
+          Seal as a time capsule: it cannot be opened before this date
+        </label>
+      )}
       <ErrorNote message={error} />
       <div className="flex gap-2">
         <Button className="flex-1" disabled={!ready || failed} loading={publish.isPending} onClick={() => publish.mutate(false)}>
-          {schedule ? "Schedule" : "Share"}
+          {schedule ? (capsule ? "Seal time capsule" : "Schedule") : "Share"}
         </Button>
         <Button variant="secondary" disabled={!ready || failed || publish.isPending} onClick={() => publish.mutate(true)}>
           Save draft
@@ -195,9 +222,9 @@ function NewPost() {
             {drafts.data.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-2 py-1 text-sm">
                 <Link href={`/p/${d.id}`} className="min-h-11 min-w-0 flex-1 truncate leading-[44px]">
-                  {d.caption || "Untitled"} <span className="text-muted">({d.status}{d.scheduled_at ? `, ${new Date(d.scheduled_at).toLocaleString()}` : ""})</span>
+                  {d.caption || "Untitled"} <span className="text-muted">({d.is_capsule ? "time capsule" : d.status}{d.scheduled_at ? `, ${new Date(d.scheduled_at).toLocaleString()}` : ""})</span>
                 </Link>
-                {(d.status === "draft" || d.status === "scheduled") && (
+                {(d.status === "draft" || d.status === "scheduled") && !d.is_capsule && (
                   <Button variant="secondary" onClick={async () => { await api(`/posts/${d.id}/publish`, { method: "POST" }); drafts.refetch(); toast("Publishing"); }}>
                     Publish
                   </Button>

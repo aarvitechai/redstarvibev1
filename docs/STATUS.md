@@ -10,6 +10,16 @@ running stack. "Written, not run" means the code or config exists but nothing ha
 - Photo posts through the real pipeline: presigned upload, magic byte check, metadata stripped by re-encoding, AVIF and WebP sizes
 - Video through the real pipeline: H.264 HLS ladder and poster, playback confirmed in Chromium
 - Text on a photo or video while creating a post: style, size, colour, drag to place, shown on the published post and moderated with the caption
+- Password reset by emailed code, which ends all sessions
+- Mute, restrict and hidden words (held comments show only to their author and the post owner, who can allow them)
+- Tagging people in posts, a Tagged tab on profiles, and removing your own tag
+- Hashtag pages with Top and Recent; share by copy link, WhatsApp or the device share sheet
+- View counts on photos, videos and reels: one per account or visitor cookie per post per day, not counting the author
+- Admin and super admin dashboards, the full report list with filters and CSV export, and the audit log
+- Staff and business roles from one permission map, support tickets, verification, plan prices and ad review
+- Story close friends, reactions, polls, quizzes and festival frames
+- Post filters (shown with CSS, the file is unchanged), collab posts, pinned posts and time capsules
+- Message requests, sharing posts into chats, group chat screens, voice notes and communities
 - Feed (fan-out on write, celebrity merge on read, ranking), likes, comments, replies, saves, collections, search
 - Real-time chat with typing, delivered and seen; live like counters; notifications over WebSocket
 - 1:1 video call through a real LiveKit server, video flowing both ways (with Chromium fake cameras)
@@ -23,6 +33,7 @@ These need something this machine did not have.
 
 | Item | What it needs |
 |---|---|
+| Chat translation | `ANTHROPIC_API_KEY`. Tested with a stand-in for Claude only. |
 | Claude features: auto captions, LLM moderation, generated assistant answers, LLM insights | `ANTHROPIC_API_KEY` |
 | BGE-M3, OpenCLIP, faster-whisper | Image built with `--extra ai`, plus model downloads |
 | Google sign in, Turnstile | Credentials |

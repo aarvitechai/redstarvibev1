@@ -21,7 +21,7 @@ class UserAdminOut(BaseModel):
 
 
 class RoleIn(BaseModel):
-    role: Literal["user", "admin"]
+    role: Literal["user", "business", "staff", "admin"]
 
 
 def out(u: User) -> UserAdminOut:

@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import CITEXT, INET, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -20,8 +20,9 @@ class User(Base):
     phone_encrypted: Mapped[str | None] = mapped_column(Text)
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending active suspended deleting
-    role: Mapped[str] = mapped_column(String(20), default="user")  # user admin superadmin
+    role: Mapped[str] = mapped_column(String(20), default="user")  # user business staff admin superadmin
     totp_secret_encrypted: Mapped[str | None] = mapped_column(Text)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     follower_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -41,6 +42,7 @@ class Profile(Base):
     bio: Mapped[str] = mapped_column(String(500), default="")
     avatar_key: Mapped[str | None] = mapped_column(Text)
     website: Mapped[str | None] = mapped_column(String(200))
+    hidden_words: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     user: Mapped[User] = relationship(back_populates="profile")
 
 
@@ -48,6 +50,16 @@ class Block(Base):
     __tablename__ = "blocks"
     blocker_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     blocked_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserLimit(Base):
+    """Mute and restrict. One-way and silent: the other person is never told."""
+
+    __tablename__ = "user_limits"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    target_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10), primary_key=True)  # mute restrict
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

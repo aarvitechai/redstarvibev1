@@ -1,6 +1,6 @@
 "use client";
 import {
-  Bell, Bot, Compass, Film, Home, MessageCircle, PlusSquare, Radio, Search, Settings, Shield, Bookmark,
+  Bell, Bot, Briefcase, Compass, LifeBuoy, Film, Home, MessageCircle, PlusSquare, Radio, Search, Settings, Shield, Bookmark, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,9 +29,12 @@ function items(counts: Counts, me: Me) {
     { href: "/notifications", label: "Notifications", icon: Bell, count: counts.notifications },
     { href: "/new", label: "Create", icon: PlusSquare },
     { href: "/live", label: "Live", icon: Radio },
+    { href: "/communities", label: "Communities", icon: Users },
     { href: "/saved", label: "Saved", icon: Bookmark },
     { href: "/ai", label: "Vibe AI", icon: Bot },
-    ...(me.role === "admin" || me.role === "superadmin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
+    ...(me.permissions?.includes("moderate_first_level") ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
+    ...(me.permissions?.includes("manage_business") ? [{ href: "/business-tools", label: "Business", icon: Briefcase }] : []),
+    { href: "/support", label: "Support", icon: LifeBuoy },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 }

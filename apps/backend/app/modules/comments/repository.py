@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.comments.models import Comment
@@ -19,12 +19,14 @@ async def get(s: AsyncSession, comment_id: uuid.UUID) -> Comment | None:
 
 async def list_for_post(
     s: AsyncSession, post_id: uuid.UUID, parent_id: uuid.UUID | None, cursor: uuid.UUID | None, limit: int,
-    hidden_authors: set[uuid.UUID],
+    hidden_authors: set[uuid.UUID], viewer: uuid.UUID | None, post_author: uuid.UUID,
 ) -> list[Comment]:
     q = select(Comment).where(Comment.post_id == post_id, Comment.deleted_at.is_(None))
     q = q.where(Comment.parent_id == parent_id if parent_id else Comment.parent_id.is_(None))
     if hidden_authors:
         q = q.where(Comment.author_id.not_in(hidden_authors))
+    if viewer != post_author:
+        q = q.where(or_(Comment.held.is_(False), Comment.author_id == viewer) if viewer else Comment.held.is_(False))
     if cursor:
         q = q.where(Comment.id < cursor)
     return list((await s.execute(q.order_by(Comment.id.desc()).limit(limit))).scalars().unique())

@@ -102,6 +102,9 @@ export default function LoginPage() {
       <Button type="submit" className="w-full" loading={formState.isSubmitting}>
         Log in
       </Button>
+      <Link href="/forgot-password" className="flex min-h-11 items-center justify-center text-sm font-semibold text-brand">
+        Forgot password?
+      </Link>
       <Button type="button" variant="secondary" className="w-full" onClick={() => setOtpMode("email")}>
         Log in with an email code
       </Button>

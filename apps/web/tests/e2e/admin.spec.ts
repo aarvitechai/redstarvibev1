@@ -40,7 +40,7 @@ test("an admin adds test data, sees it in the app, then removes it", async ({ pa
   await page.getByRole("button", { name: "Yes, remove" }).click();
   await expect(batch).toContainText("Removed", { timeout: 60_000 });
   const left = await page.evaluate(async () => (await (await fetch("/api/v1/search?q=test_")).json()).users.length);
-  expect(left).toBe(0);
+  expect(left).toBe(found - 3);
 });
 
 test("a normal user cannot open the admin page", async ({ page }, info) => {
@@ -48,7 +48,7 @@ test("a normal user cannot open the admin page", async ({ page }, info) => {
   await login(page, "asha");
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
   await page.goto("/admin");
-  await expect(page.getByText("Admins only")).toBeVisible();
+  await expect(page.getByText("Staff only")).toBeVisible();
 });
 
 test("a super admin can make and remove an admin", async ({ page }, info) => {

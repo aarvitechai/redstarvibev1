@@ -1,5 +1,6 @@
 """Sign up, email OTP, password and Google login, rotating refresh tokens, TOTP MFA."""
 import secrets
+import time
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -186,6 +187,32 @@ async def otp_login(s: AsyncSession, email: str, code: str, totp: str | None, ip
     _check_totp(user, totp)
     await users.audit(s, user.id, "auth.login_otp", str(user.id), ip)
     return user
+
+
+async def request_password_reset(s: AsyncSession, email: str) -> None:
+    await hit(f"otp_send:{email.lower()}", 3, 600)
+    user = await users.by_email(s, email)
+    if user and user.status in {"active", "deleting"}:
+        await _send_otp(email, "reset")
+
+
+async def reset_password(s: AsyncSession, email: str, code: str, password: str) -> None:
+    """Ends every session. It does not log in, so an authenticator app is still needed afterwards."""
+    await _check_otp(email, "reset", code)
+    user = await users.by_email(s, email)
+    if user is None or user.status not in {"active", "deleting"}:
+        raise bad_request("otp_invalid", "That code is wrong or has expired")
+    if user.username.lower() in password.lower() or await is_breached_password(password):
+        raise bad_request("weak_password", "This password is too common or has appeared in a data breach")
+    user.password_hash = hash_password(password)
+    await repo.revoke_all(s, user.id)
+    await users.audit(s, user.id, "auth.password_reset", str(user.id))
+    await s.commit()
+    await get_redis().set(f"sessions_ended:{user.id}", int(time.time()), ex=settings.access_token_minutes * 60 + 60)
+    await enqueue(
+        "notifications.send_email", user.email, "Your RedStarVibe password was changed",
+        "Your password was just changed and all devices were logged out. If this was not you, reset it again now.",
+    )
 
 
 # ---- sessions ----

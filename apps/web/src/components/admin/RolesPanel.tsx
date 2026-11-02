@@ -6,7 +6,8 @@ import { useMe } from "@/hooks/useMe";
 import { api, errorMessage } from "@/lib/api/client";
 import type { AdminUserRow } from "@/lib/api/types";
 
-const LABEL: Record<string, string> = { superadmin: "Super admin", admin: "Admin", user: "User" };
+const LABEL: Record<string, string> = { superadmin: "Super admin", admin: "Admin", staff: "Staff", business: "Business", user: "User" };
+const ROLES = ["admin", "staff", "business"];
 
 export function RolesPanel() {
   const { data: me } = useMe();
@@ -27,7 +28,7 @@ export function RolesPanel() {
   });
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted">Search for a person to make them an admin. With an empty search, this lists current staff.</p>
+      <p className="text-sm text-muted">Search for a person to give them a role. With an empty search, this lists current staff.</p>
       <Input aria-label="Search users" placeholder="Username or email" value={text} onChange={(e) => setText(e.target.value)} />
       <ErrorNote message={change.error ? errorMessage(change.error) : null} />
       {users.isLoading ? (
@@ -45,9 +46,13 @@ export function RolesPanel() {
                 </p>
               </div>
               {u.id !== me?.id && u.role !== "superadmin" && !u.is_test && (
-                <Button variant="secondary" onClick={() => change.mutate({ id: u.id, role: u.role === "admin" ? "user" : "admin" })}>
-                  {u.role === "admin" ? "Remove admin" : "Make admin"}
-                </Button>
+                <div className="flex flex-wrap justify-end gap-1">
+                  {u.role !== "user" ? (
+                    <Button variant="secondary" onClick={() => change.mutate({ id: u.id, role: "user" })}>Remove {LABEL[u.role]?.toLowerCase()}</Button>
+                  ) : (
+                    ROLES.map((role) => <Button key={role} variant="secondary" onClick={() => change.mutate({ id: u.id, role })}>Make {LABEL[role]?.toLowerCase()}</Button>)
+                  )}
+                </div>
               )}
             </li>
           ))}

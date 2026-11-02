@@ -161,6 +161,7 @@ async def test_notifications_created_and_marked_read(make_user, make_post):
 
 async def test_message_seen_flow(make_user):
     a, b = await make_user(), await make_user()
+    await b.post(f"/users/{a.username}/follow")
     conv = (await a.post("/conversations", json={"usernames": [b.username]})).json()["id"]
     same = (await b.post("/conversations", json={"usernames": [a.username]})).json()["id"]
     assert conv == same  # one 1:1 per pair

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.models import Embedding
@@ -55,6 +55,20 @@ async def by_hashtag(
     if cursor:
         stmt = stmt.where(Post.id < cursor)
     return list((await s.execute(stmt.order_by(Post.id.desc()).limit(limit))).scalars())
+
+
+async def top_by_hashtag(
+    s: AsyncSession, tag: str, viewer: uuid.UUID | None, after: tuple[int, uuid.UUID] | None, limit: int
+) -> list[tuple[uuid.UUID, int]]:
+    score = Post.like_count + Post.comment_count * 2 + Post.save_count * 3
+    stmt = (
+        select(Post.id, score).join(User, User.id == Post.author_id).join(PostHashtag, PostHashtag.post_id == Post.id)
+        .where(PostHashtag.tag == tag, visible_clause(viewer))
+    )
+    if after:
+        stmt = stmt.where(tuple_(score, Post.id) < tuple_(literal(after[0]), literal(after[1])))
+    rows = await s.execute(stmt.order_by(score.desc(), Post.id.desc()).limit(limit))
+    return [(r[0], r[1]) for r in rows]
 
 
 async def by_place(

@@ -44,6 +44,8 @@ async def start_call(s: AsyncSession, me: User, data: CallCreate) -> CallJoin:
     members = await chat.member_ids(s, data.conversation_id)
     if me.id not in members:
         raise not_found("Conversation")
+    if any(state != "active" for state in (await chat.member_states(s, data.conversation_id)).values()):
+        raise forbidden("Calls work once everyone has accepted the message request")
     limit = MAX_VIDEO_MEMBERS if data.kind == "video" else MAX_AUDIO_MEMBERS
     if len(members) > limit:
         raise bad_request("too_many_members", f"{data.kind.title()} calls support up to {limit} people")

@@ -24,5 +24,12 @@ async def revoke_family(s: AsyncSession, family_id: uuid.UUID) -> None:
     )
 
 
+async def revoke_all(s: AsyncSession, user_id: uuid.UUID) -> None:
+    await s.execute(
+        update(RefreshToken).where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+
+
 async def by_google_sub(s: AsyncSession, sub: str) -> User | None:
     return (await s.execute(select(User).where(User.google_sub == sub))).scalars().first()

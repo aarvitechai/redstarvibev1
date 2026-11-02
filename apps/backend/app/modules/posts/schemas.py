@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.media.schemas import AssetOut, TextOverlay
+from app.modules.media.schemas import AssetOut, MediaEdit, TextOverlay
 from app.modules.users.schemas import UserBrief
 
 
@@ -16,6 +16,10 @@ class PostCreate(BaseModel):
     is_reel: bool = False
     alt_texts: list[str | None] | None = None
     text_overlays: list[TextOverlay | None] | None = Field(None, max_length=10)  # same order as asset_ids
+    tagged_usernames: list[str] = Field(default_factory=list, max_length=20)
+    media_edits: list[MediaEdit | None] | None = Field(None, max_length=10)  # same order as asset_ids
+    collab_username: str | None = Field(None, max_length=60)
+    is_capsule: bool = False
     draft: bool = False
     scheduled_at: datetime | None = None
 
@@ -35,6 +39,10 @@ class PostOut(BaseModel):
     status: str
     is_reel: bool
     media: list[AssetOut]
+    tagged: list[UserBrief] = []
+    collaborator: UserBrief | None = None
+    pinned: bool = False
+    is_capsule: bool = False
     like_count: int
     comment_count: int
     view_count: int
@@ -49,6 +57,16 @@ class PostOut(BaseModel):
 class LikeResult(BaseModel):
     liked: bool
     like_count: int
+
+
+class CapsuleTeaser(BaseModel):
+    count: int
+    next_unlock_at: datetime | None
+
+
+class ViewResult(BaseModel):
+    view_count: int
+    counted: bool
 
 
 class CollectionIn(BaseModel):

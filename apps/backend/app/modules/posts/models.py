@@ -28,12 +28,16 @@ class Post(Base):
     save_count: Mapped[int] = mapped_column(Integer, default=0)
     engagement_score: Mapped[float] = mapped_column(Float, default=0)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_capsule: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     author: Mapped[User] = relationship(lazy="joined", innerjoin=True)
     media: Mapped[list["PostMedia"]] = relationship(
         order_by="PostMedia.position", lazy="selectin", cascade="all, delete-orphan"
     )
+    collab: Mapped["PostCollab | None"] = relationship(lazy="selectin", viewonly=True, uselist=False)
+    tagged: Mapped[list[User]] = relationship(secondary="post_tags", lazy="selectin", viewonly=True, order_by="User.username")
 
     @property
     def overlay_texts(self) -> list[str]:
@@ -53,7 +57,25 @@ class PostMedia(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     alt_text: Mapped[str | None] = mapped_column(String(500))
     text_overlay: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    edit: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     asset: Mapped[MediaAsset] = relationship(lazy="joined", innerjoin=True)
+
+
+class PostCollab(Base):
+    """A second author. Shown only after they accept."""
+
+    __tablename__ = "post_collabs"
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(10), default="pending")  # pending accepted
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user: Mapped[User] = relationship(lazy="joined", innerjoin=True)
+
+
+class PostTag(Base):
+    __tablename__ = "post_tags"
+    post_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
 
 
 class Like(Base):

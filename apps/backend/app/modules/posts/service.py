@@ -15,7 +15,7 @@ from app.core.cache import (
     get_redis,
 )
 from app.core.config import settings
-from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.core.errors import AppError, bad_request, conflict, forbidden, not_found
 from app.core.events import emit, enqueue
 from app.core.pagination import Page, encode_cursor
 from app.core.rate_limit import hit
@@ -23,14 +23,16 @@ from app.modules.follows import repository as follows
 from app.modules.media import repository as media_repo
 from app.modules.media.service import asset_out
 from app.modules.posts import repository as repo
-from app.modules.posts.models import Collection, Post, PostMedia
+from app.modules.posts.models import Collection, Post, PostCollab, PostMedia, PostTag
 from app.modules.posts.schemas import (
+    CapsuleTeaser,
     CollectionOut,
     Insights,
     LikeResult,
     PostCreate,
     PostOut,
     PostUpdate,
+    ViewResult,
 )
 from app.modules.users import repository as users
 from app.modules.users import service as user_service
@@ -39,6 +41,9 @@ from app.modules.users.schemas import DataExport
 from app.realtime.pubsub import publish
 
 HASHTAG_RE = re.compile(r"(?:^|\s)#(\w{1,60})", re.UNICODE)
+MAX_PINS = 3
+VIEW_WINDOW = 86400
+VIEW_IP_LIMIT = 300  # visitor view requests per minute from one IP, high enough for a shared network
 MENTION_RE = re.compile(r"(?:^|\s)@([a-zA-Z0-9_.]{3,30})")
 
 
@@ -58,7 +63,10 @@ def _base(post: Post) -> dict[str, Any]:
     return PostOut(
         id=post.id, author=user_service.brief(post.author), caption=post.caption, location=post.location,
         visibility=post.visibility, status=post.status, is_reel=post.is_reel,
-        media=[asset_out(m.asset, m.alt_text, m.text_overlay) for m in post.media],
+        media=[asset_out(m.asset, m.alt_text, m.text_overlay, m.edit) for m in post.media],
+        tagged=[user_service.brief(u) for u in post.tagged],
+        collaborator=user_service.brief(post.collab.user) if post.collab and post.collab.status == "accepted" else None,
+        pinned=post.pinned_at is not None, is_capsule=post.is_capsule,
         like_count=post.like_count, comment_count=post.comment_count, view_count=post.view_count,
         save_count=post.save_count, created_at=post.created_at, scheduled_at=post.scheduled_at,
     ).model_dump(mode="json")
@@ -121,6 +129,86 @@ async def get_post(s: AsyncSession, viewer: User | None, post_id: uuid.UUID) -> 
     return (await hydrate(s, viewer, [post_id]))[0]
 
 
+async def _add_tags(s: AsyncSession, author: User, post_id: uuid.UUID, usernames: list[str]) -> None:
+    wanted = {u.strip().lstrip("@").lower() for u in usernames if u.strip()}
+    people = await users.by_usernames(s, list(wanted))
+    allowed = [
+        u for u in people
+        if u.status == "active" and not await users.is_blocked_either_way(s, author.id, u.id)
+    ]
+    if len(allowed) != len(wanted):  # one message for every reason, so this cannot be used to discover blocks
+        raise bad_request("invalid_tag", "One of those people cannot be tagged")
+    for person in allowed:
+        s.add(PostTag(post_id=post_id, user_id=person.id))
+    await s.flush()
+
+
+async def _invite_collab(s: AsyncSession, author: User, post_id: uuid.UUID, username: str) -> None:
+    person = await users.by_username(s, username.strip().lstrip("@"))
+    if (
+        person is None or person.id == author.id or person.status != "active"
+        or await users.is_blocked_either_way(s, author.id, person.id)
+    ):
+        raise bad_request("invalid_collab", "That person cannot be invited")
+    s.add(PostCollab(post_id=post_id, user_id=person.id))
+    await s.flush()
+
+
+async def collab_requests(s: AsyncSession, user: User) -> list[PostOut]:
+    return await hydrate(s, user, await repo.pending_collab_post_ids(s, user.id))
+
+
+async def accept_collab(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
+    if not await repo.set_collab_accepted(s, post_id, user.id):
+        raise not_found("Invite")
+    await s.commit()
+    await invalidate(post_id)
+    await emit("post.collab_accepted", post_id=post_id, user_id=user.id)
+
+
+async def remove_collab(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
+    """Declines an invite, or leaves a post. Either way the person's name comes off it."""
+    if not await repo.remove_collab(s, post_id, user.id):
+        raise not_found("Invite")
+    await s.commit()
+    await invalidate(post_id)
+
+
+async def pin(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
+    post = await _owned(s, user, post_id)
+    if post.status != "published":
+        raise bad_request("not_published", "Only published posts can be pinned")
+    if post.pinned_at is None:
+        if await repo.pinned_count(s, user.id) >= MAX_PINS:
+            raise conflict("too_many_pins", f"You can pin up to {MAX_PINS} posts. Unpin one first.")
+        post.pinned_at = datetime.now(UTC)
+    await s.commit()
+    await invalidate(post_id)
+
+
+async def unpin(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
+    post = await _owned(s, user, post_id)
+    post.pinned_at = None
+    await s.commit()
+    await invalidate(post_id)
+
+
+async def capsule_teaser(s: AsyncSession, viewer: User | None, username: str) -> CapsuleTeaser:
+    """How many are sealed and when the next one opens. Nothing about what is inside."""
+    author = await user_service.get_visible_user(s, viewer, username)
+    if not await user_service.can_view_content_of(s, viewer, author):
+        return CapsuleTeaser(count=0, next_unlock_at=None)
+    count, next_at = await repo.capsule_summary(s, author.id)
+    return CapsuleTeaser(count=count, next_unlock_at=next_at)
+
+
+async def remove_my_tag(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
+    if not await repo.remove_tag(s, post_id, user.id):
+        raise not_found("Tag")
+    await s.commit()
+    await invalidate(post_id)
+
+
 async def create_post(s: AsyncSession, user: User, data: PostCreate, idempotency_key: str | None) -> PostOut:
     await hit(f"post:user:{user.id}", 30, 3600)
     idem = f"idem:post:{user.id}:{idempotency_key}" if idempotency_key else None
@@ -140,6 +228,8 @@ async def create_post(s: AsyncSession, user: User, data: PostCreate, idempotency
         if data.is_reel and (len(assets) != 1 or assets[0].kind != "video"):
             raise bad_request("reel_needs_video", "A reel must be exactly one video")
         status = "processing"
+        if data.is_capsule and (data.draft or not data.scheduled_at):
+            raise bad_request("capsule_needs_date", "A time capsule needs a date to open")
         if data.scheduled_at:
             if data.scheduled_at <= datetime.now(UTC):
                 raise bad_request("invalid_schedule", "Schedule time must be in the future")
@@ -148,18 +238,24 @@ async def create_post(s: AsyncSession, user: User, data: PostCreate, idempotency
             status = "draft"
         alts = data.alt_texts or []
         overlays = data.text_overlays or []
+        edits = data.media_edits or []
         post = Post(
             author_id=user.id, caption=data.caption.strip(), location=(data.location or "").strip() or None,
             visibility=data.visibility, is_reel=data.is_reel, status=status, scheduled_at=data.scheduled_at,
+            is_capsule=data.is_capsule,
         )
         post.media = [
             PostMedia(
                 asset_id=aid, position=i, alt_text=(alts[i] if i < len(alts) else None),
                 text_overlay=(overlay.model_dump() if i < len(overlays) and (overlay := overlays[i]) else None),
+                edit=(edit.model_dump() if i < len(edits) and (edit := edits[i]) else None),
             )
             for i, aid in enumerate(data.asset_ids)
         ]
         await repo.add(s, post)
+        await _add_tags(s, user, post.id, data.tagged_usernames)
+        if data.collab_username:
+            await _invite_collab(s, user, post.id, data.collab_username)
         await s.commit()
     except Exception:
         if idem:
@@ -215,6 +311,8 @@ async def publish_draft(s: AsyncSession, user: User, post_id: uuid.UUID) -> Post
     post = await _owned(s, user, post_id)
     if post.status not in {"draft", "scheduled"}:
         raise conflict("not_draft", "Only drafts can be published")
+    if post.is_capsule:
+        raise conflict("capsule_sealed", "A time capsule opens on its date")
     post.status, post.scheduled_at = "processing", None
     await s.commit()
     await invalidate(post.id)
@@ -279,9 +377,36 @@ async def unsave(s: AsyncSession, user: User, post_id: uuid.UUID) -> None:
     await s.commit()
 
 
-async def record_view(s: AsyncSession, viewer: User | None, post_id: uuid.UUID) -> None:
-    await get_viewable(s, viewer, post_id)
-    await counter_incr(post_id, "view_count", 1)
+async def record_view(
+    s: AsyncSession, viewer: User | None, post_id: uuid.UUID, visitor_id: str | None, ip: str
+) -> tuple[ViewResult, str | None]:
+    """One view per person per post per day. Returns the visitor id to store when a new cookie is needed.
+
+    Logged in people are counted by account, so clearing cookies cannot add views. Visitors are counted by
+    cookie, and a limit per IP stops a script that sends a new cookie every time.
+    """
+    post = await get_viewable(s, viewer, post_id)
+    new_visitor = None
+    if viewer:
+        who = f"u:{viewer.id}"
+    else:
+        if not visitor_id:
+            visitor_id = new_visitor = uuid.uuid4().hex
+        who = f"c:{visitor_id}"
+    counted = False
+    if post.status == "published" and post.author_id != (viewer.id if viewer else None):
+        try:
+            if not viewer:
+                await hit(f"view:ip:{ip}", VIEW_IP_LIMIT, 60)
+            counted = bool(await get_redis().set(f"viewed:{post_id}:{who}", "1", nx=True, ex=VIEW_WINDOW))
+        except AppError:
+            counted = False  # over the limit: show the page normally, just do not count it
+    if counted:
+        await counter_incr(post_id, "view_count", 1)
+    out = (await hydrate(s, viewer, [post_id]))[0]
+    if counted:
+        await _publish_count(post_id, "view_count", out.view_count)
+    return ViewResult(view_count=out.view_count, counted=counted), new_visitor
 
 
 async def saved_page(

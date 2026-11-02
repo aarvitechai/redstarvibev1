@@ -1,5 +1,6 @@
 """Auth and session dependencies."""
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 import jwt
@@ -10,6 +11,7 @@ from app.core.cache import get_redis
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.errors import AppError, forbidden, unauthorized
+from app.core.permissions import STAFF_ROLES, has_permission
 from app.core.rate_limit import client_ip
 from app.core.security import decode_token
 from app.modules.users.models import User
@@ -31,6 +33,9 @@ async def _token_user_id(request: Request) -> uuid.UUID | None:
     except jwt.InvalidTokenError as exc:
         raise unauthorized("invalid_token", "Invalid session") from exc
     if await get_redis().exists(f"deny:{payload.get('jti')}"):
+        raise unauthorized("token_revoked", "Session ended")
+    ended = await get_redis().get(f"sessions_ended:{payload['sub']}")
+    if ended and int(str(payload.get("iat", 0))) <= int(str(ended)):
         raise unauthorized("token_revoked", "Session ended")
     return uuid.UUID(str(payload["sub"]))
 
@@ -56,15 +61,32 @@ async def optional_user(request: Request, session: Db) -> User | None:
         return None
 
 
-async def admin_user(request: Request, user: Annotated[User, Depends(current_user)]) -> User:
+def _staff_guard(request: Request, user: User) -> None:
     allow = [ip.strip() for ip in settings.admin_ip_allowlist.split(",") if ip.strip()]
     if allow and client_ip(request) not in allow:
         raise forbidden("Admin access is not allowed from this network")
-    if user.role not in {"admin", "superadmin"}:
-        raise forbidden("Admin access required")
     if settings.is_prod and not user.totp_enabled:
         raise forbidden("Admins must enable MFA")
+
+
+async def admin_user(request: Request, user: Annotated[User, Depends(current_user)]) -> User:
+    if user.role not in {"admin", "superadmin"}:
+        raise forbidden("Admin access required")
+    _staff_guard(request, user)
     return user
+
+
+def require_permission(permission: str) -> Callable[..., Awaitable[User]]:
+    """Route dependency that checks the permission map. Staff roles also pass the network and MFA checks."""
+
+    async def check(request: Request, user: Annotated[User, Depends(current_user)]) -> User:
+        if not has_permission(user.role, permission):
+            raise forbidden("You do not have permission to do this")
+        if user.role in STAFF_ROLES:
+            _staff_guard(request, user)
+        return user
+
+    return check
 
 
 async def super_admin_user(user: Annotated[User, Depends(admin_user)]) -> User:

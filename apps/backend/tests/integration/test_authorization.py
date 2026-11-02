@@ -70,6 +70,7 @@ async def test_conversation_not_visible_to_non_member(make_user):
 
 async def test_call_token_only_for_members(make_user):
     a, b, c = await make_user(), await make_user(), await make_user()
+    await b.post(f"/users/{a.username}/follow")
     conv = (await a.post("/conversations", json={"usernames": [b.username]})).json()["id"]
     assert (await c.post("/calls", json={"conversation_id": conv, "kind": "video"})).status_code == 404
     call = (await a.post("/calls", json={"conversation_id": conv, "kind": "video"})).json()

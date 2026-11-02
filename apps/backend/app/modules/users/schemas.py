@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints, field_validator
 
 
 class UserBrief(BaseModel):
@@ -9,6 +10,7 @@ class UserBrief(BaseModel):
     username: str
     display_name: str
     avatar_url: str | None = None
+    verified: bool = False
 
 
 class ProfileOut(UserBrief):
@@ -22,6 +24,8 @@ class ProfileOut(UserBrief):
     follow_status: str | None = None  # active | pending | None
     follows_you: bool = False
     is_blocked: bool = False
+    is_muted: bool = False
+    is_restricted: bool = False
     can_view_posts: bool = True
     has_active_story: bool = False
 
@@ -32,6 +36,8 @@ class MeOut(ProfileOut):
     status: str
     totp_enabled: bool
     delete_after: datetime | None = None
+    hidden_words: list[str] = []
+    permissions: list[str] = []
 
 
 class ProfileUpdate(BaseModel):
@@ -42,6 +48,7 @@ class ProfileUpdate(BaseModel):
     is_private: bool | None = None
     avatar_asset_id: uuid.UUID | None = None
     phone: str | None = Field(None, max_length=20)
+    hidden_words: list[Annotated[str, StringConstraints(max_length=50)]] | None = Field(None, max_length=200)
 
     @field_validator("website")
     @classmethod

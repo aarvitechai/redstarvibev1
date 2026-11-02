@@ -23,11 +23,6 @@ export default function PostPage() {
     socket.connect();
     return () => socket.disconnect();
   }, [me]);
-  useEffect(() => {
-    if (q.data?.status === "published" && q.data.media[0]?.kind === "image") {
-      api(`/posts/${postId}/view`, { method: "POST" }).catch(() => undefined);
-    }
-  }, [q.data?.status, q.data?.media, postId]);
   return (
     <main className="mx-auto max-w-[520px] sm:p-4">
       <nav className="flex min-h-12 items-center gap-2 border-b border-line px-3 sm:border-0">

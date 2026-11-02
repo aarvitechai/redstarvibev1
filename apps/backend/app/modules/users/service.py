@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import get_redis
 from app.core.errors import bad_request, forbidden, not_found
+from app.core.permissions import permissions_of
 from app.core.security import encrypt_field
 from app.core.storage import public_url
 from app.modules.follows import repository as follow_repo
@@ -21,7 +22,7 @@ def brief(user: User) -> UserBrief:
     return UserBrief(
         id=user.id, username=user.username,
         display_name=(user.profile.display_name if user.profile else "") or user.username,
-        avatar_url=avatar_url(user),
+        avatar_url=avatar_url(user), verified=user.verified,
     )
 
 
@@ -51,11 +52,13 @@ async def get_visible_user(s: AsyncSession, viewer: User | None, username: str) 
 
 async def profile_out(s: AsyncSession, viewer: User | None, user: User) -> ProfileOut:
     is_self = bool(viewer and viewer.id == user.id)
-    follow_status, follows_you, is_blocked = None, False, False
+    follow_status, follows_you, is_blocked, is_muted, is_restricted = None, False, False, False, False
     if viewer and not is_self:
         follow_status = await follow_repo.status_of(s, viewer.id, user.id)
         follows_you = await follow_repo.status_of(s, user.id, viewer.id) == "active"
         is_blocked = await repo.has_blocked(s, viewer.id, user.id)
+        is_muted = await repo.has_limit(s, viewer.id, user.id, "mute")
+        is_restricted = await repo.has_limit(s, viewer.id, user.id, "restrict")
     from app.modules.stories import repository as stories_repo
 
     can_view = await can_view_content_of(s, viewer, user)
@@ -64,6 +67,7 @@ async def profile_out(s: AsyncSession, viewer: User | None, user: User) -> Profi
         bio=user.profile.bio, website=user.profile.website, is_private=user.is_private,
         follower_count=user.follower_count, following_count=user.following_count, post_count=user.post_count,
         is_self=is_self, follow_status=follow_status, follows_you=follows_you, is_blocked=is_blocked,
+        is_muted=is_muted, is_restricted=is_restricted,
         can_view_posts=can_view,
         has_active_story=can_view and await stories_repo.has_active(s, user.id),
     )
@@ -74,6 +78,7 @@ async def me_out(s: AsyncSession, user: User) -> MeOut:
     return MeOut(
         **base.model_dump(), email=user.email, role=user.role, status=user.status,
         totp_enabled=user.totp_enabled, delete_after=user.delete_after,
+        hidden_words=user.profile.hidden_words or [], permissions=sorted(permissions_of(user.role)),
     )
 
 
@@ -86,6 +91,8 @@ async def update_profile(s: AsyncSession, user: User, data: ProfileUpdate) -> Me
         user.profile.website = str(data.website) if data.website else None
     if data.phone is not None:
         user.phone_encrypted = encrypt_field(data.phone) if data.phone else None
+    if data.hidden_words is not None:
+        user.profile.hidden_words = sorted({w.strip().lower() for w in data.hidden_words if w.strip()})
     if data.avatar_asset_id is not None:
         asset = await repo.ready_avatar(s, data.avatar_asset_id, user.id)
         if asset is None or not asset.variants:
@@ -122,6 +129,19 @@ async def unblock(s: AsyncSession, me: User, username: str) -> None:
     if other is None:
         raise not_found("User")
     await repo.remove_block(s, me.id, other.id)
+    await s.commit()
+
+
+async def set_limit(s: AsyncSession, me: User, username: str, kind: str, on: bool) -> None:
+    other = await repo.by_username(s, username)
+    if other is None:
+        raise not_found("User")
+    if other.id == me.id:
+        raise bad_request("invalid_target", "You cannot do this to yourself")
+    if on:
+        await repo.add_limit(s, me.id, other.id, kind)
+    else:
+        await repo.remove_limit(s, me.id, other.id, kind)
     await s.commit()
 
 

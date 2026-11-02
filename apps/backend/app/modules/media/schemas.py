@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"}
 VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+AUDIO_TYPES = {"audio/webm", "audio/ogg", "audio/mp4"}
 
 
 class UploadIn(BaseModel):
@@ -37,6 +38,15 @@ class TextOverlay(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
 
 
+class MediaEdit(BaseModel):
+    """Filter and adjustments, shown with CSS so the original file is never changed."""
+
+    filter: Literal["none", "clarendon", "warm", "cool", "vintage", "mono"]
+    brightness: int = Field(ge=50, le=150)
+    contrast: int = Field(ge=50, le=150)
+    saturate: int = Field(ge=0, le=200)
+
+
 class AssetOut(BaseModel):
     id: uuid.UUID
     kind: str
@@ -52,3 +62,5 @@ class AssetOut(BaseModel):
     subtitles: str | None = None
     alt_text: str | None = None
     text_overlay: TextOverlay | None = None
+    edit: MediaEdit | None = None
+    audio: str | None = None

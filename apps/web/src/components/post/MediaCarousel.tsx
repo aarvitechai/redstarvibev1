@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Asset } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { editStyle } from "./mediaEdit";
 import { MediaImage } from "./MediaImage";
 import { TextOverlayView } from "./TextOverlay";
 import { VideoPlayer } from "./VideoPlayer";
@@ -31,11 +32,13 @@ export function MediaCarousel({ media, priority, onView }: { media: Asset[]; pri
       >
         {media.map((asset, i) => (
           <div key={asset.id} className="relative h-full w-full shrink-0 snap-center">
-            {asset.kind === "video" ? (
-              <VideoPlayer asset={asset} onView={onView} className="h-full w-full object-contain" />
-            ) : (
-              <MediaImage asset={asset} sizes={SIZES} priority={priority && i === 0} className="h-full w-full object-cover" />
-            )}
+            <div className="h-full w-full" style={editStyle(asset.edit)}>
+              {asset.kind === "video" ? (
+                <VideoPlayer asset={asset} onView={onView} className="h-full w-full object-contain" />
+              ) : (
+                <MediaImage asset={asset} sizes={SIZES} priority={priority && i === 0} className="h-full w-full object-cover" />
+              )}
+            </div>
             <TextOverlayView overlay={asset.text_overlay} />
           </div>
         ))}

@@ -2,7 +2,8 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chat.models import Conversation, ConversationMember, Message
@@ -12,12 +13,48 @@ async def by_direct_key(s: AsyncSession, key: str) -> Conversation | None:
     return (await s.execute(select(Conversation).where(Conversation.direct_key == key))).scalar_one_or_none()
 
 
-async def create(s: AsyncSession, conv: Conversation, members: Sequence[uuid.UUID]) -> None:
+async def create(s: AsyncSession, conv: Conversation, members: dict[uuid.UUID, str]) -> None:
     s.add(conv)
     await s.flush()
-    for uid in members:
-        s.add(ConversationMember(conversation_id=conv.id, user_id=uid))
+    for uid, state in members.items():
+        s.add(ConversationMember(conversation_id=conv.id, user_id=uid, state=state))
     await s.flush()
+
+
+async def member_states(s: AsyncSession, conv_id: uuid.UUID) -> dict[uuid.UUID, str]:
+    q = select(ConversationMember.user_id, ConversationMember.state).where(ConversationMember.conversation_id == conv_id)
+    return {r[0]: r[1] for r in await s.execute(q)}
+
+
+async def set_state(s: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID, state: str) -> None:
+    await s.execute(
+        update(ConversationMember)
+        .where(ConversationMember.conversation_id == conv_id, ConversationMember.user_id == user_id)
+        .values(state=state)
+    )
+
+
+async def add_member(s: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID, state: str) -> None:
+    await s.execute(
+        insert(ConversationMember).values(conversation_id=conv_id, user_id=user_id, state=state)
+        .on_conflict_do_update(index_elements=["conversation_id", "user_id"], set_={"state": state})
+    )
+
+
+async def remove_member(s: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    await s.execute(delete(ConversationMember).where(
+        ConversationMember.conversation_id == conv_id, ConversationMember.user_id == user_id
+    ))
+
+
+async def sent_count(s: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID) -> int:
+    q = select(func.count()).select_from(Message).where(Message.conversation_id == conv_id, Message.sender_id == user_id)
+    return int((await s.execute(q)).scalar_one())
+
+
+async def message_in(s: AsyncSession, conv_id: uuid.UUID, message_id: uuid.UUID) -> Message | None:
+    q = select(Message).where(Message.conversation_id == conv_id, Message.id == message_id)
+    return (await s.execute(q)).scalars().first()
 
 
 async def get(s: AsyncSession, conv_id: uuid.UUID) -> Conversation | None:
@@ -36,11 +73,11 @@ async def member_ids(s: AsyncSession, conv_id: uuid.UUID) -> list[uuid.UUID]:
     return list((await s.execute(q)).scalars())
 
 
-async def list_for_user(s: AsyncSession, user_id: uuid.UUID, limit: int = 50) -> list[Conversation]:
+async def list_for_user(s: AsyncSession, user_id: uuid.UUID, state: str = "active", limit: int = 50) -> list[Conversation]:
     q = (
         select(Conversation)
         .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
-        .where(ConversationMember.user_id == user_id)
+        .where(ConversationMember.user_id == user_id, ConversationMember.state == state)
         .order_by(Conversation.last_message_at.desc()).limit(limit)
     )
     return list((await s.execute(q)).scalars())
@@ -83,3 +120,7 @@ async def mark(s: AsyncSession, conv_id: uuid.UUID, user_id: uuid.UUID, field: s
         .values({field: now})
     )
     return now
+
+
+async def sender_of(s: AsyncSession, message_id: uuid.UUID) -> uuid.UUID | None:
+    return (await s.execute(select(Message.sender_id).where(Message.id == message_id))).scalar_one_or_none()

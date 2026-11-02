@@ -7,8 +7,14 @@ USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.]{3,30}$")
 RESERVED = {
     "admin", "api", "login", "signup", "feed", "explore", "reels", "messages", "notifications", "settings",
     "search", "p", "call", "live", "saved", "new", "oauth", "age-check", "ai", "offline", "redstarvibe", "support",
-    "business", "home",
+    "business", "home", "communities", "business-tools", "forgot-password", "close-friends", "tag", "place", "admin-tools",
 }
+
+
+class PasswordResetIn(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6)
+    password: str = Field(min_length=10, max_length=128)
 
 
 class SignupIn(BaseModel):

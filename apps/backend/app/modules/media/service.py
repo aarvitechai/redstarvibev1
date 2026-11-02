@@ -11,7 +11,17 @@ from app.core.rate_limit import hit
 from app.core.storage import presign_put, public_url
 from app.modules.media import repository as repo
 from app.modules.media.models import MediaAsset
-from app.modules.media.schemas import IMAGE_TYPES, VIDEO_TYPES, AssetOut, ImageVariant, TextOverlay, UploadIn, UploadOut
+from app.modules.media.schemas import (
+    AUDIO_TYPES,
+    IMAGE_TYPES,
+    VIDEO_TYPES,
+    AssetOut,
+    ImageVariant,
+    MediaEdit,
+    TextOverlay,
+    UploadIn,
+    UploadOut,
+)
 from app.modules.users.models import User
 
 
@@ -21,6 +31,8 @@ async def create_upload(s: AsyncSession, user: User, data: UploadIn, origin: str
         kind, limit = "image", settings.max_image_bytes
     elif data.content_type in VIDEO_TYPES and data.purpose != "avatar":
         kind, limit = "video", settings.max_video_bytes
+    elif data.content_type in AUDIO_TYPES and data.purpose == "message":
+        kind, limit = "audio", settings.max_audio_bytes
     else:
         raise bad_request("unsupported_type", "That file type is not supported")
     if data.size > limit:
@@ -38,12 +50,16 @@ async def create_upload(s: AsyncSession, user: User, data: UploadIn, origin: str
     return UploadOut(asset_id=asset_id, upload_url=url, headers={"Content-Type": data.content_type})
 
 
-def asset_out(asset: MediaAsset, alt_text: str | None = None, text_overlay: dict[str, Any] | None = None) -> AssetOut:
+def asset_out(
+    asset: MediaAsset, alt_text: str | None = None, text_overlay: dict[str, Any] | None = None,
+    edit: dict[str, Any] | None = None,
+) -> AssetOut:
     v = asset.variants or {}
     return AssetOut(
         id=asset.id, kind=asset.kind, status=asset.status, error=asset.error, width=asset.width, height=asset.height,
         duration=asset.duration, placeholder=asset.placeholder, alt_text=alt_text,
         text_overlay=TextOverlay.model_validate(text_overlay) if text_overlay else None,
+        edit=MediaEdit.model_validate(edit) if edit else None, audio=public_url(v.get("audio")),
         images=[
             ImageVariant(w=i["w"], avif=public_url(i.get("avif")), webp=public_url(i["webp"]) or "")
             for i in v.get("images", [])

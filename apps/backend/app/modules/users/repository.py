@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.follows.models import Follow
 from app.modules.media.models import MediaAsset
-from app.modules.users.models import AuditLog, Block, Profile, User
+from app.modules.users.models import AuditLog, Block, Profile, User, UserLimit
 
 
 async def by_id(s: AsyncSession, user_id: uuid.UUID) -> User | None:
@@ -56,6 +56,30 @@ async def blocked_ids(s: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
         select(Block.blocker_id).where(Block.blocked_id == user_id)
     )
     return set((await s.execute(q)).scalars())
+
+
+async def limit_ids(s: AsyncSession, user_id: uuid.UUID, kind: str) -> set[uuid.UUID]:
+    q = select(UserLimit.target_id).where(UserLimit.user_id == user_id, UserLimit.kind == kind)
+    return set((await s.execute(q)).scalars())
+
+
+async def has_limit(s: AsyncSession, user_id: uuid.UUID, target_id: uuid.UUID, kind: str) -> bool:
+    return await s.get(UserLimit, (user_id, target_id, kind)) is not None
+
+
+async def add_limit(s: AsyncSession, user_id: uuid.UUID, target_id: uuid.UUID, kind: str) -> None:
+    await s.execute(insert(UserLimit).values(user_id=user_id, target_id=target_id, kind=kind).on_conflict_do_nothing())
+
+
+async def remove_limit(s: AsyncSession, user_id: uuid.UUID, target_id: uuid.UUID, kind: str) -> None:
+    await s.execute(delete(UserLimit).where(
+        UserLimit.user_id == user_id, UserLimit.target_id == target_id, UserLimit.kind == kind
+    ))
+
+
+async def limited_list(s: AsyncSession, user_id: uuid.UUID, kind: str) -> list[User]:
+    q = select(User).join(UserLimit, UserLimit.target_id == User.id).where(UserLimit.user_id == user_id, UserLimit.kind == kind)
+    return list((await s.execute(q.order_by(UserLimit.created_at.desc()))).scalars().unique())
 
 
 async def has_blocked(s: AsyncSession, blocker: uuid.UUID, blocked: uuid.UUID) -> bool:
@@ -165,7 +189,10 @@ async def purge(s: AsyncSession, user_id: uuid.UUID) -> PurgeResult:
         await s.execute(update(Post).where(Post.id.in_(saved)).values(save_count=func.greatest(Post.save_count - 1, 0)))
     commented = await s.execute(
         select(Comment.post_id, func.count())
-        .where(Comment.author_id == user_id, Comment.post_id.not_in(own_posts), Comment.deleted_at.is_(None))
+        .where(
+            Comment.author_id == user_id, Comment.post_id.not_in(own_posts), Comment.deleted_at.is_(None),
+            Comment.held.is_(False),
+        )
         .group_by(Comment.post_id)
     )
     for post_id, count in commented.all():

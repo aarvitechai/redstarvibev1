@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Query
 
 from app.api.deps import Db, OptionalUser
@@ -24,8 +26,11 @@ async def images(viewer: OptionalUser, s: Db, q: str = Query(min_length=2, max_l
 
 @router.get("/hashtags/{tag}/posts", response_model=Page[PostOut])
 async def tag_posts(
-    tag: str, viewer: OptionalUser, s: Db, cursor: str | None = None, limit: int = Query(24, ge=1, le=48)
+    tag: str, viewer: OptionalUser, s: Db, cursor: str | None = None, limit: int = Query(24, ge=1, le=48),
+    sort: Literal["recent", "top"] = "recent",
 ) -> Page[PostOut]:
+    if sort == "top":
+        return await service.tag_top_page(s, viewer, tag, cursor, limit)
     return await service.tag_page(s, viewer, tag, cursor, limit)
 
 

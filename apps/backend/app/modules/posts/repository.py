@@ -9,7 +9,7 @@ from sqlalchemy.orm import aliased
 
 from app.modules.comments.models import Comment
 from app.modules.follows.models import Follow
-from app.modules.posts.models import Collection, Hashtag, Like, Post, PostHashtag, PostMedia, Save
+from app.modules.posts.models import Collection, Hashtag, Like, Post, PostCollab, PostHashtag, PostMedia, PostTag, Save
 from app.modules.users.models import Block, User
 
 
@@ -27,6 +27,71 @@ def visible_clause(viewer_id: uuid.UUID | None) -> ColumnElement[bool]:
         and_(b.blocker_id == Post.author_id, b.blocked_id == viewer_id),
     ))
     return and_(base, ~blocked, or_(public, Post.author_id == viewer_id, follows))
+
+
+async def pending_collab_post_ids(s: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
+    q = (
+        select(Post.id).join(PostCollab, PostCollab.post_id == Post.id)
+        .where(
+            PostCollab.user_id == user_id, PostCollab.status == "pending", Post.status == "published",
+            Post.deleted_at.is_(None),
+        )
+    )
+    return list((await s.execute(q.order_by(Post.id.desc()).limit(50))).scalars())
+
+
+async def set_collab_accepted(s: AsyncSession, post_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    stmt = (
+        update(PostCollab).where(PostCollab.post_id == post_id, PostCollab.user_id == user_id, PostCollab.status == "pending")
+        .values(status="accepted").returning(PostCollab.post_id)
+    )
+    return (await s.execute(stmt)).first() is not None
+
+
+async def remove_collab(s: AsyncSession, post_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    stmt = delete(PostCollab).where(PostCollab.post_id == post_id, PostCollab.user_id == user_id).returning(PostCollab.post_id)
+    return (await s.execute(stmt)).first() is not None
+
+
+def _live_pins(author: uuid.UUID) -> ColumnElement[bool]:
+    return and_(Post.author_id == author, Post.pinned_at.is_not(None), Post.status == "published", Post.deleted_at.is_(None))
+
+
+async def pinned_count(s: AsyncSession, author: uuid.UUID) -> int:
+    return int((await s.execute(select(func.count()).select_from(Post).where(_live_pins(author)))).scalar_one())
+
+
+async def pinned_post_ids(s: AsyncSession, author: uuid.UUID, include_followers: bool) -> list[uuid.UUID]:
+    q = select(Post.id).where(_live_pins(author))
+    if not include_followers:
+        q = q.where(Post.visibility == "public")
+    return list((await s.execute(q.order_by(Post.pinned_at.desc()))).scalars())
+
+
+async def capsule_summary(s: AsyncSession, author: uuid.UUID) -> tuple[int, datetime | None]:
+    q = select(func.count(), func.min(Post.scheduled_at)).where(
+        Post.author_id == author, Post.is_capsule.is_(True), Post.status == "scheduled", Post.deleted_at.is_(None)
+    )
+    row = (await s.execute(q)).one()
+    return int(row[0]), row[1]
+
+
+async def remove_tag(s: AsyncSession, post_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    stmt = delete(PostTag).where(PostTag.post_id == post_id, PostTag.user_id == user_id).returning(PostTag.user_id)
+    res = await s.execute(stmt)
+    return res.first() is not None
+
+
+async def tagged_post_ids(
+    s: AsyncSession, user_id: uuid.UUID, viewer: uuid.UUID | None, cursor: uuid.UUID | None, limit: int
+) -> list[uuid.UUID]:
+    q = (
+        select(Post.id).join(User, User.id == Post.author_id).join(PostTag, PostTag.post_id == Post.id)
+        .where(PostTag.user_id == user_id, visible_clause(viewer))
+    )
+    if cursor:
+        q = q.where(Post.id < cursor)
+    return list((await s.execute(q.order_by(Post.id.desc()).limit(limit))).scalars())
 
 
 async def add(s: AsyncSession, post: Post) -> None:
@@ -48,11 +113,16 @@ async def get_many(s: AsyncSession, ids: Sequence[uuid.UUID]) -> list[Post]:
 async def author_post_ids(
     s: AsyncSession, author: uuid.UUID, include_followers: bool, cursor: uuid.UUID | None, limit: int, reels: bool
 ) -> list[uuid.UUID]:
-    q = select(Post.id).where(Post.author_id == author, Post.status == "published", Post.deleted_at.is_(None))
+    collabs = select(PostCollab.post_id).where(PostCollab.user_id == author, PostCollab.status == "accepted")
+    q = select(Post.id).where(
+        or_(Post.author_id == author, Post.id.in_(collabs)), Post.status == "published", Post.deleted_at.is_(None)
+    )
     if not include_followers:
         q = q.where(Post.visibility == "public")
     if reels:
         q = q.where(Post.is_reel.is_(True))
+    else:  # pinned posts lead the first page, so they must not repeat further down
+        q = q.where(or_(Post.author_id != author, Post.pinned_at.is_(None)))
     if cursor:
         q = q.where(Post.id < cursor)
     return list((await s.execute(q.order_by(Post.id.desc()).limit(limit))).scalars())

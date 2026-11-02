@@ -10,7 +10,7 @@ import type { Comment } from "@/lib/api/types";
 import { timeAgo } from "@/lib/utils";
 import { Caption } from "./Caption";
 
-function CommentItem({ comment, postId, onReply }: { comment: Comment; postId: string; onReply: (c: Comment) => void }) {
+function CommentItem({ comment, postId, isPostOwner, onReply }: { comment: Comment; postId: string; isPostOwner?: boolean; onReply: (c: Comment) => void }) {
   const qc = useQueryClient();
   const [showReplies, setShowReplies] = useState(false);
   const replies = useInfinite<Comment>(["comments", postId, comment.id], `/posts/${postId}/comments?parent_id=${comment.id}`, showReplies);
@@ -28,6 +28,18 @@ function CommentItem({ comment, postId, onReply }: { comment: Comment; postId: s
         </p>
         <div className="mt-0.5 flex items-center gap-3 text-xs text-muted">
           <span>{timeAgo(comment.created_at)}</span>
+          {comment.held && <span className="font-semibold text-brand">Hidden from others</span>}
+          {comment.held && isPostOwner && (
+            <button
+              className="min-h-8 font-semibold"
+              onClick={async () => {
+                await api(`/comments/${comment.id}/approve`, { method: "POST" });
+                qc.invalidateQueries({ queryKey: ["comments", postId] });
+              }}
+            >
+              Show to everyone
+            </button>
+          )}
           <button className="min-h-8 font-semibold" onClick={() => onReply(comment)}>
             Reply
           </button>
@@ -52,7 +64,7 @@ function CommentItem({ comment, postId, onReply }: { comment: Comment; postId: s
         {showReplies && (
           <ul>
             {[...replies.items].reverse().map((r) => (
-              <CommentItem key={r.id} comment={r} postId={postId} onReply={onReply} />
+              <CommentItem key={r.id} comment={r} postId={postId} isPostOwner={isPostOwner} onReply={onReply} />
             ))}
           </ul>
         )}
@@ -61,7 +73,7 @@ function CommentItem({ comment, postId, onReply }: { comment: Comment; postId: s
   );
 }
 
-export function Comments({ postId }: { postId: string }) {
+export function Comments({ postId, isPostOwner }: { postId: string; isPostOwner?: boolean }) {
   const qc = useQueryClient();
   const list = useInfinite<Comment>(["comments", postId], `/posts/${postId}/comments`);
   const [body, setBody] = useState("");
@@ -83,7 +95,7 @@ export function Comments({ postId }: { postId: string }) {
       ) : (
         <ul className="divide-y divide-transparent">
           {list.items.map((c) => (
-            <CommentItem key={c.id} comment={c} postId={postId} onReply={setReplyTo} />
+            <CommentItem key={c.id} comment={c} postId={postId} isPostOwner={isPostOwner} onReply={setReplyTo} />
           ))}
         </ul>
       )}

@@ -1,9 +1,12 @@
+import re
 import uuid
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, Query, Request, Response
 
 from app.api.deps import CurrentUser, Db, OptionalUser
+from app.core.config import settings
 from app.core.pagination import Page, id_cursor
+from app.core.rate_limit import client_ip
 from app.modules.posts import repository as repo
 from app.modules.posts import service
 from app.modules.posts.schemas import (
@@ -15,7 +18,11 @@ from app.modules.posts.schemas import (
     PostOut,
     PostUpdate,
     SaveIn,
+    ViewResult,
 )
+
+VISITOR_COOKIE = "rsv_visitor"
+VISITOR_RE = re.compile(r"[0-9a-f]{32}")
 
 router = APIRouter(tags=["posts"])
 
@@ -53,6 +60,36 @@ async def publish(post_id: uuid.UUID, me: CurrentUser, s: Db) -> PostOut:
     return await service.publish_draft(s, me, post_id)
 
 
+@router.delete("/posts/{post_id}/tags/me", status_code=204)
+async def remove_my_tag(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.remove_my_tag(s, me, post_id)
+
+
+@router.get("/collab-requests", response_model=list[PostOut])
+async def collab_requests(me: CurrentUser, s: Db) -> list[PostOut]:
+    return await service.collab_requests(s, me)
+
+
+@router.post("/posts/{post_id}/collab/accept", status_code=204)
+async def accept_collab(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.accept_collab(s, me, post_id)
+
+
+@router.delete("/posts/{post_id}/collab/me", status_code=204)
+async def remove_collab(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.remove_collab(s, me, post_id)
+
+
+@router.post("/posts/{post_id}/pin", status_code=204)
+async def pin(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.pin(s, me, post_id)
+
+
+@router.delete("/posts/{post_id}/pin", status_code=204)
+async def unpin(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
+    await service.unpin(s, me, post_id)
+
+
 @router.post("/posts/{post_id}/like", response_model=LikeResult)
 async def like(post_id: uuid.UUID, me: CurrentUser, s: Db) -> LikeResult:
     return await service.like(s, me, post_id)
@@ -73,9 +110,17 @@ async def unsave(post_id: uuid.UUID, me: CurrentUser, s: Db) -> None:
     await service.unsave(s, me, post_id)
 
 
-@router.post("/posts/{post_id}/view", status_code=204)
-async def view(post_id: uuid.UUID, viewer: OptionalUser, s: Db) -> None:
-    await service.record_view(s, viewer, post_id)
+@router.post("/posts/{post_id}/view", response_model=ViewResult)
+async def view(post_id: uuid.UUID, request: Request, response: Response, viewer: OptionalUser, s: Db) -> ViewResult:
+    cookie = request.cookies.get(VISITOR_COOKIE, "")
+    visitor = cookie if VISITOR_RE.fullmatch(cookie) else None
+    result, new_visitor = await service.record_view(s, viewer, post_id, visitor, client_ip(request))
+    if new_visitor:
+        response.set_cookie(
+            VISITOR_COOKIE, new_visitor, max_age=365 * 86400, path="/api/v1/posts", httponly=True,
+            secure=settings.cookie_secure, samesite="lax", domain=settings.cookie_domain or None,
+        )
+    return result
 
 
 @router.get("/posts/{post_id}/insights", response_model=Insights)

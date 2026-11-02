@@ -27,6 +27,9 @@ class Actor:
     async def patch(self, url, **kw):  # noqa: ANN001, ANN201
         return await self.c.patch(f"/api/v1{url}", headers=self._h(), **kw)
 
+    async def put(self, url, **kw):  # noqa: ANN001, ANN201
+        return await self.c.put(f"/api/v1{url}", headers=self._h(), **kw)
+
     async def delete(self, url, **kw):  # noqa: ANN001, ANN201
         return await self.c.delete(f"/api/v1{url}", headers=self._h(), **kw)
 

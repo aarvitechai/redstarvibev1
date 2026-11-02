@@ -18,5 +18,6 @@ class CommentOut(BaseModel):
     author: UserBrief
     body: str
     reply_count: int
+    held: bool = False
     created_at: datetime
     can_delete: bool = False

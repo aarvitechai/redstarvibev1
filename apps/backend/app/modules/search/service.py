@@ -1,9 +1,12 @@
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.embeddings.provider import embed_query
 from app.ai.vision.clip import embed_image_query
 from app.core.config import settings
-from app.core.pagination import Page, encode_cursor, id_cursor
+from app.core.errors import bad_request
+from app.core.pagination import Page, decode_cursor, encode_cursor, id_cursor
 from app.modules.posts import service as posts
 from app.modules.posts.schemas import PostOut
 from app.modules.search import repository as repo
@@ -43,6 +46,21 @@ async def tag_page(s: AsyncSession, viewer: User | None, tag: str, cursor: str |
     more = len(ids) > limit
     ids = ids[:limit]
     return Page(items=await posts.hydrate(s, viewer, ids), next_cursor=encode_cursor(ids[-1]) if more else None)
+
+
+async def tag_top_page(s: AsyncSession, viewer: User | None, tag: str, cursor: str | None, limit: int) -> Page[PostOut]:
+    after: tuple[int, uuid.UUID] | None = None
+    if cursor:
+        try:
+            score, post_id = decode_cursor(cursor)
+            after = (int(score), uuid.UUID(post_id))
+        except ValueError as exc:
+            raise bad_request("invalid_cursor", "Invalid cursor") from exc
+    rows = await repo.top_by_hashtag(s, tag, viewer.id if viewer else None, after, limit + 1)
+    more = len(rows) > limit
+    rows = rows[:limit]
+    items = await posts.hydrate(s, viewer, [r[0] for r in rows])
+    return Page(items=items, next_cursor=encode_cursor(rows[-1][1], rows[-1][0]) if more else None)
 
 
 async def place_page(s: AsyncSession, viewer: User | None, place: str, cursor: str | None, limit: int) -> Page[PostOut]:

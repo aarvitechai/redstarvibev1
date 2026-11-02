@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     media_public_base: str = "/rsv-public"  # e.g. https://media.redstarvibe.com in production
     max_image_bytes: int = 20 * 1024 * 1024
     max_video_bytes: int = 512 * 1024 * 1024
+    max_audio_bytes: int = 20 * 1024 * 1024
+    max_voice_seconds: int = 300
     max_reel_seconds: int = 90
     max_post_video_seconds: int = 600
     clamav_host: str = ""

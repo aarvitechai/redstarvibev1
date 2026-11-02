@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.models import Embedding
 from app.modules.follows.models import Follow
-from app.modules.posts.models import Like, Post
+from app.modules.posts.models import Like, Post, PostCollab
 from app.modules.posts.repository import visible_clause
 from app.modules.users.models import User
 
@@ -13,9 +13,10 @@ from app.modules.users.models import User
 async def recent_for_rebuild(s: AsyncSession, user_id: uuid.UUID, limit: int) -> list[uuid.UUID]:
     """Newest posts from accounts the user follows, plus their own. Excludes celebrities' fan-out-on-read."""
     followed = select(Follow.followee_id).where(Follow.follower_id == user_id, Follow.status == "active")
+    collabs = select(PostCollab.post_id).where(PostCollab.status == "accepted", PostCollab.user_id.in_(followed))
     q = (
         select(Post.id).join(User, User.id == Post.author_id)
-        .where(visible_clause(user_id), (Post.author_id.in_(followed)) | (Post.author_id == user_id))
+        .where(visible_clause(user_id), (Post.author_id.in_(followed)) | (Post.author_id == user_id) | Post.id.in_(collabs))
         .order_by(Post.id.desc()).limit(limit)
     )
     return list((await s.execute(q)).scalars())

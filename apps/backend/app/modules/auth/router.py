@@ -71,6 +71,18 @@ async def otp_login(data: schemas.OtpLoginIn, request: Request, response: Respon
     return await users.me_out(s, user)
 
 
+@router.post("/password/forgot", status_code=202, response_model=schemas.Accepted,
+             dependencies=[Depends(ip_limit("otp", 20, 3600))])
+async def password_forgot(data: schemas.EmailIn, s: Db) -> schemas.Accepted:
+    await service.request_password_reset(s, data.email)
+    return schemas.Accepted(detail="If that account exists, a code is on its way")
+
+
+@router.post("/password/reset", status_code=204, dependencies=[Depends(ip_limit("verify", 30, 600))])
+async def password_reset(data: schemas.PasswordResetIn, s: Db) -> None:
+    await service.reset_password(s, data.email, data.code, data.password)
+
+
 @router.post("/refresh", response_model=MeOut, dependencies=[Depends(ip_limit("refresh", 120, 600))])
 async def refresh(request: Request, response: Response, s: Db) -> MeOut:
     user = await service.rotate(s, response, request.cookies.get("rsv_refresh"), request.headers.get("user-agent"))
