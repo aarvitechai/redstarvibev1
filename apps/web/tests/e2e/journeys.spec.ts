@@ -102,6 +102,42 @@ test("upload a photo, it is processed and published", async ({ page }, info) => 
   await expect(page.getByText(caption).first()).toBeVisible({ timeout: 15_000 });
 });
 
+test("write styled text on a photo, it shows on the published post", async ({ page }) => {
+  await login(page, "demo");
+  await page.goto("/new");
+  await page.getByTestId("file-input").setInputFiles(pngFile());
+  const words = `Big sale ${Date.now()}`;
+  await page.getByLabel("Text on photo").fill(words);
+  const preview = page.getByTestId("text-overlay-preview");
+  await expect(preview).toHaveText(words);
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await page.getByRole("button", { name: "Highlight" }).click();
+  await page.getByRole("button", { name: "Large" }).click();
+  const before = await preview.boundingBox();
+  await preview.dragTo(page.locator("section").filter({ has: preview }).locator("img"));
+  const after = await preview.boundingBox();
+  expect(after!.y).toBeGreaterThan(before!.y);
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+
+  const share = page.getByRole("button", { name: "Share" });
+  await expect(share).toBeEnabled({ timeout: 30_000 });
+  await share.click();
+  await expect(page).toHaveURL(/\/p\//);
+  await expect(page.getByText("Processing. It will go live shortly.")).toBeHidden({ timeout: 30_000 });
+
+  const shown = page.getByTestId("text-overlay").first();
+  await expect(shown).toHaveText(words);
+  const frame = await page.locator("article picture img").first().boundingBox();
+  const box = await shown.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(frame!.y);
+  expect(box!.y + box!.height / 2).toBeLessThan(frame!.y + frame!.height * 0.3);
+  expect(box!.x).toBeGreaterThanOrEqual(frame!.x);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(frame!.x + frame!.width);
+  await page.screenshot({ path: test.info().outputPath("text-on-photo.png") });
+  const noScroll = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(noScroll).toBe(true);
+});
+
 test("two people chat in real time with typing and seen receipts", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop-1280", "once is enough");
   const a = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
@@ -170,6 +206,8 @@ test("video upload produces HLS that plays", async ({ page }, info) => {
   await page.goto("/new?reel=1");
   await page.getByTestId("file-input").setInputFiles(process.env.E2E_VIDEO!);
   await page.getByLabel("Caption").fill(`reel ${Date.now()} #reel`);
+  await page.getByLabel("Text on video").fill("Watch till the end");
+  await page.screenshot({ path: test.info().outputPath("composer-video.png"), fullPage: true });
   const share = page.getByRole("button", { name: "Share" });
   await expect(share).toBeEnabled({ timeout: 120_000 });
   await share.click();
@@ -178,4 +216,8 @@ test("video upload produces HLS that plays", async ({ page }, info) => {
   const video = page.locator("video").first();
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState), { timeout: 30_000 }).toBeGreaterThan(1);
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect(page.getByTestId("text-overlay").first()).toHaveText("Watch till the end");
+  await page.getByRole("button", { name: "Unmute" }).click(); // the text must not block the video controls
+  await expect(page.getByRole("button", { name: "Mute", exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("text-on-video.png") });
 });

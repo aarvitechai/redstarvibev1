@@ -45,7 +45,7 @@ def _thumbnails(post: Post) -> list[bytes]:
 
 
 async def _index(s: AsyncSession, post: Post, thumbs: list[bytes]) -> None:
-    text = " ".join(filter(None, [post.caption, post.location]))
+    text = " ".join(filter(None, [post.full_text, post.location]))
     await delete_entity(s, "post", str(post.id))
     await delete_entity(s, "post_image", str(post.id))
     if text:
@@ -69,7 +69,7 @@ async def _enrich(post_id: uuid.UUID) -> None:
         if post is None or post.status != "processing":
             return
         thumbs = _thumbnails(post)
-        verdict = await moderate(post.caption, thumbs)
+        verdict = await moderate(post.full_text, thumbs)
         if verdict.score >= 0.5:
             await mod_repo.add(s, Report(
                 entity_type="post", entity_id=post.id, reason=verdict.category[:40], source="ai", score=verdict.score,

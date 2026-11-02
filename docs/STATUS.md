@@ -9,6 +9,7 @@ running stack. "Written, not run" means the code or config exists but nothing ha
 - Profiles, private accounts, follow requests, blocks, reports, data export, account deletion and purge
 - Photo posts through the real pipeline: presigned upload, magic byte check, metadata stripped by re-encoding, AVIF and WebP sizes
 - Video through the real pipeline: H.264 HLS ladder and poster, playback confirmed in Chromium
+- Text on a photo or video while creating a post: style, size, colour, drag to place, shown on the published post and moderated with the caption
 - Feed (fan-out on write, celebrity merge on read, ranking), likes, comments, replies, saves, collections, search
 - Real-time chat with typing, delivered and seen; live like counters; notifications over WebSocket
 - 1:1 video call through a real LiveKit server, video flowing both ways (with Chromium fake cameras)

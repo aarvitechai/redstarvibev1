@@ -1,7 +1,7 @@
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"}
 VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
@@ -26,6 +26,17 @@ class ImageVariant(BaseModel):
     webp: str
 
 
+class TextOverlay(BaseModel):
+    """Text shown on top of one photo or video. Stored as data, so it stays sharp and can be moderated."""
+
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    x: float = Field(ge=0, le=100)  # centre of the text, percent of the frame
+    y: float = Field(ge=0, le=100)
+    size: Literal["small", "medium", "large"]
+    style: Literal["shadow", "label", "highlight"]
+    color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+
+
 class AssetOut(BaseModel):
     id: uuid.UUID
     kind: str
@@ -40,3 +51,4 @@ class AssetOut(BaseModel):
     poster: str | None = None
     subtitles: str | None = None
     alt_text: str | None = None
+    text_overlay: TextOverlay | None = None

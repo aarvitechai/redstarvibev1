@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import CITEXT, UUID
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -34,6 +35,15 @@ class Post(Base):
         order_by="PostMedia.position", lazy="selectin", cascade="all, delete-orphan"
     )
 
+    @property
+    def overlay_texts(self) -> list[str]:
+        return [m.text_overlay["text"] for m in self.media if m.text_overlay]
+
+    @property
+    def full_text(self) -> str:
+        """Everything the author wrote. Moderation and search indexing must read this, not only the caption."""
+        return "\n".join(filter(None, [self.caption, *self.overlay_texts]))
+
 
 class PostMedia(Base):
     __tablename__ = "post_media"
@@ -42,6 +52,7 @@ class PostMedia(Base):
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("media_assets.id", ondelete="CASCADE"))
     position: Mapped[int] = mapped_column(Integer, default=0)
     alt_text: Mapped[str | None] = mapped_column(String(500))
+    text_overlay: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     asset: Mapped[MediaAsset] = relationship(lazy="joined", innerjoin=True)
 
 

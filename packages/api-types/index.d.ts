@@ -1630,6 +1630,7 @@ export interface components {
             subtitles?: string | null;
             /** Alt Text */
             alt_text?: string | null;
+            text_overlay?: components["schemas"]["TextOverlay"] | null;
         };
         /** BatchIn */
         BatchIn: {
@@ -2217,6 +2218,8 @@ export interface components {
             is_reel: boolean;
             /** Alt Texts */
             alt_texts?: (string | null)[] | null;
+            /** Text Overlays */
+            text_overlays?: (components["schemas"]["TextOverlay"] | null)[] | null;
             /**
              * Draft
              * @default false
@@ -2562,6 +2565,30 @@ export interface components {
              * @default false
              */
             viewed: boolean;
+        };
+        /**
+         * TextOverlay
+         * @description Text shown on top of one photo or video. Stored as data, so it stays sharp and can be moderated.
+         */
+        TextOverlay: {
+            /** Text */
+            text: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /**
+             * Size
+             * @enum {string}
+             */
+            size: "small" | "medium" | "large";
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "shadow" | "label" | "highlight";
+            /** Color */
+            color: string;
         };
         /** TotpCode */
         TotpCode: {

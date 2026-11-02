@@ -1,16 +1,31 @@
 "use client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ImagePlus, Sparkles, X } from "lucide-react";
+import { ImagePlus, Sparkles, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
+import { frameRatio } from "@/components/post/MediaCarousel";
+import { TextOverlayEditor } from "@/components/post/TextOverlayEditor";
 import { Button, ErrorNote, Field, Input, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api/client";
-import type { CaptionOut, Post } from "@/lib/api/types";
+import type { CaptionOut, Post, TextOverlay } from "@/lib/api/types";
 import { uploadAsset } from "@/lib/api/upload";
+import { cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
 
-type Item = { key: string; file: File; preview: string; progress: number; assetId?: string; error?: string };
+type Item = {
+  key: string;
+  file: File;
+  preview: string;
+  progress: number;
+  assetId?: string;
+  error?: string;
+  width?: number | null;
+  height?: number | null;
+  overlay?: TextOverlay;
+};
+
+const REEL_RATIO = 9 / 16;
 
 function NewPost() {
   const router = useRouter();
@@ -18,6 +33,7 @@ function NewPost() {
   const toast = useUi((s) => s.showToast);
   const [isReel, setIsReel] = useState(params.has("reel"));
   const [items, setItems] = useState<Item[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [location, setLocation] = useState("");
   const [visibility, setVisibility] = useState("public");
@@ -38,10 +54,14 @@ function NewPost() {
         setItems((list) => [...list, { key, file, preview: URL.createObjectURL(file), progress: 0 }]);
         const update = (patch: Partial<Item>) => setItems((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)));
         uploadAsset(file, isReel ? "reel" : "post", (progress) => update({ progress }))
-          .then((asset) => update({ assetId: asset.id, progress: 1 }))
+          .then((asset) => update({ assetId: asset.id, progress: 1, width: asset.width, height: asset.height }))
           .catch((e) => update({ error: errorMessage(e) }));
       });
   };
+
+  const selected = items.find((i) => i.key === selectedKey) ?? items[0];
+  const setOverlay = (key: string, overlay: TextOverlay | undefined) =>
+    setItems((list) => list.map((i) => (i.key === key ? { ...i, overlay } : i)));
 
   const ready = items.length > 0 && items.every((i) => i.assetId);
   const failed = items.some((i) => i.error);
@@ -58,6 +78,7 @@ function NewPost() {
           draft,
           scheduled_at: !draft && schedule ? new Date(schedule).toISOString() : null,
           alt_texts: altText ? [altText] : null,
+          text_overlays: items.map((i) => (i.overlay?.text.trim() ? i.overlay : null)),
         },
         headers: { "Idempotency-Key": idempotency.current },
       }),
@@ -91,16 +112,18 @@ function NewPost() {
         This is a reel: one vertical video up to 90 seconds
       </label>
       <div className="grid grid-cols-3 gap-2">
-        {items.map((item) => (
-          <div key={item.key} className="relative aspect-square overflow-hidden rounded-lg bg-surface">
+        {items.map((item, index) => (
+          <div key={item.key} className={cn("relative aspect-square overflow-hidden rounded-lg bg-surface", items.length > 1 && item.key === selected?.key && "ring-2 ring-brand")}>
             {item.file.type.startsWith("video") ? <video src={item.preview} muted className="h-full w-full object-cover" /> : <img src={item.preview} alt="" className="h-full w-full object-cover" />}
+            <button type="button" aria-label={`Write text on item ${index + 1}`} aria-pressed={item.key === selected?.key} className="absolute inset-0" onClick={() => setSelectedKey(item.key)} />
+            {item.overlay && <Type aria-hidden className="pointer-events-none absolute bottom-1 left-1 h-5 w-5 rounded bg-black/60 p-0.5 text-white" />}
             {!item.assetId && !item.error && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-xs text-white">
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-xs text-white">
                 <Spinner className="h-5 w-5 border-2" />
                 {item.progress < 1 ? `${Math.round(item.progress * 100)}%` : "Processing"}
               </div>
             )}
-            {item.error && <div className="absolute inset-0 flex items-center justify-center bg-black/70 p-1 text-center text-xs text-white">{item.error}</div>}
+            {item.error && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/70 p-1 text-center text-xs text-white">{item.error}</div>}
             <button aria-label="Remove" className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-white drop-shadow" onClick={() => setItems((l) => l.filter((i) => i.key !== item.key))}>
               <X className="h-5 w-5" />
             </button>
@@ -124,9 +147,20 @@ function NewPost() {
           e.target.value = "";
         }}
       />
+      {selected && (
+        <TextOverlayEditor
+          key={selected.key}
+          src={selected.preview}
+          isVideo={selected.file.type.startsWith("video")}
+          ratio={isReel ? REEL_RATIO : frameRatio(items[0]?.width, items[0]?.height)}
+          value={selected.overlay}
+          onChange={(overlay) => setOverlay(selected.key, overlay)}
+        />
+      )}
       <Field label="Caption">
         <textarea value={caption} maxLength={2200} rows={4} onChange={(e) => setCaption(e.target.value)} placeholder="Say something. Use #hashtags and @mentions." className="w-full rounded-lg border border-line bg-surface p-3 text-[16px] focus:border-brand focus:outline-none sm:text-sm" />
       </Field>
+      <p className="-mt-3 text-right text-xs text-muted">{caption.length}/2200</p>
       <Button type="button" variant="secondary" disabled={!items[0]?.assetId} loading={suggest.isPending} onClick={() => suggest.mutate()}>
         <Sparkles className="h-4 w-4" /> Suggest a caption with AI
       </Button>

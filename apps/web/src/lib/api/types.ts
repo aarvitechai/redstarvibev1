@@ -4,6 +4,7 @@ type S = components["schemas"];
 export type Page<T> = { items: T[]; next_cursor?: string | null };
 export type Post = S["PostOut"];
 export type Asset = S["AssetOut"];
+export type TextOverlay = S["TextOverlay"];
 export type UserBrief = S["UserBrief"];
 export type Profile = S["ProfileOut"];
 export type Me = S["MeOut"];

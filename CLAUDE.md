@@ -56,6 +56,8 @@ npx playwright test tests/e2e/admin.spec.ts --project=desktop-1280
 
 **`make test` uses the same database as the running app.** Tests leave users behind, and `test_test_data.py` exercises "remove all", which can leave real test batches stuck in "removing" because the enqueue is mocked. Don't run it against data you want to keep.
 
+**Run `docker compose` from PowerShell on Windows, or with `MSYS_NO_PATHCONV=1` in Git Bash.** If you `export` `.env` in Git Bash first, it rewrites `MEDIA_PUBLIC_BASE=/rsv-public` to a Windows path and every image breaks. Post JSON cached in Redis keeps the bad URL for up to 10 minutes.
+
 Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `migrate` service applies them on `make up`. Alembic connects directly to Postgres through `MIGRATIONS_DATABASE_URL`.
 
 ## Architecture
@@ -78,6 +80,8 @@ Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `mi
 **Media:** browser uploads to a presigned URL, then `media.process_asset` checks magic bytes, re-encodes images to strip metadata (AVIF and WebP sizes), and builds an H.264 HLS ladder for video. Local storage is SeaweedFS and production is Cloudflare R2, using the same S3 code (ADR 0005).
 
 **Auth:** cookies plus CSRF. Mutating requests need an `x-csrf-token` header matching the `rsv_csrf` cookie. Role checks are the `AdminUser` and `SuperAdminUser` dependencies in `app/api/deps.py`. Roles are `user`, `admin` and `superadmin`. Super admins can only be created with `scripts/make_superadmin.py`.
+
+**Text on media:** `post_media.text_overlay` stores one text per photo or video as JSON, drawn by `TextOverlay.tsx` with percent positions and `cqw` font sizes. It is not burned into the pixels. Moderation and indexing must read `Post.full_text`, not `caption`.
 
 **Test data** (`app/modules/admin/test_data.py`): generated accounts carry `users.test_batch_id` and are removed only by batch. They publish directly, skipping moderation and notifications. Seed accounts are not batches.
 

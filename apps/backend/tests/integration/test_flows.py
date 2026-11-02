@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import AsyncMock, patch
 
 
 async def test_like_is_idempotent_and_counted(make_user, make_post):
@@ -80,6 +81,54 @@ async def test_idempotent_post_create(make_user):
     one = await a.post("/posts", json={"asset_ids": [aid], "draft": True}, headers=key)
     two = await a.post("/posts", json={"asset_ids": [aid], "draft": True}, headers=key)
     assert one.status_code == 201 and two.json()["id"] == one.json()["id"]
+
+
+async def _ready_asset(owner_id: str) -> str:
+    import uuid
+
+    from app.core.database import SessionLocal
+    from app.modules.media.models import MediaAsset
+
+    async with SessionLocal() as s:
+        asset = MediaAsset(
+            owner_id=uuid.UUID(owner_id), purpose="post", kind="image", raw_key=f"{owner_id}/x", declared_type="image/jpeg",
+            size_bytes=1, status="ready", width=10, height=10, variants={"images": [{"w": 10, "webp": "x.webp"}]},
+        )
+        s.add(asset)
+        await s.commit()
+        return str(asset.id)
+
+
+OVERLAY = {"text": "  Big sale today  ", "x": 50, "y": 15, "size": "large", "style": "highlight", "color": "#C8102E"}
+
+
+async def test_text_on_media_is_saved_and_returned(make_user):
+    a = await make_user()
+    with patch("app.modules.posts.service.enqueue", AsyncMock()):
+        res = await a.post("/posts", json={"asset_ids": [await _ready_asset(a.id)], "caption": "hi", "text_overlays": [OVERLAY]})
+    assert res.status_code == 201, res.text
+    saved = res.json()["media"][0]["text_overlay"]
+    assert saved["text"] == "Big sale today"
+    assert saved["y"] == 15
+    fetched = await a.get(f"/posts/{res.json()['id']}")
+    assert fetched.json()["media"][0]["text_overlay"]["style"] == "highlight"
+
+
+async def test_bad_text_on_media_is_rejected(make_user):
+    a = await make_user()
+    asset = await _ready_asset(a.id)
+    for bad in ({"color": "red;"}, {"x": 101}, {"style": "html"}, {"text": "   "}, {"text": "x" * 201}):
+        res = await a.post("/posts", json={"asset_ids": [asset], "text_overlays": [OVERLAY | bad]})
+        assert res.status_code == 422, bad
+
+
+def test_moderation_reads_text_on_media():
+    from app.modules.posts.models import Post, PostMedia
+
+    post = Post(caption="nice photo")
+    post.media = [PostMedia(text_overlay=OVERLAY | {"text": "words on the photo"}), PostMedia()]
+    assert "words on the photo" in post.full_text
+    assert "nice photo" in post.full_text
 
 
 async def test_search_finds_users_and_tags(make_user, make_post):

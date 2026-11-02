@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +11,7 @@ from app.core.rate_limit import hit
 from app.core.storage import presign_put, public_url
 from app.modules.media import repository as repo
 from app.modules.media.models import MediaAsset
-from app.modules.media.schemas import IMAGE_TYPES, VIDEO_TYPES, AssetOut, ImageVariant, UploadIn, UploadOut
+from app.modules.media.schemas import IMAGE_TYPES, VIDEO_TYPES, AssetOut, ImageVariant, TextOverlay, UploadIn, UploadOut
 from app.modules.users.models import User
 
 
@@ -37,11 +38,12 @@ async def create_upload(s: AsyncSession, user: User, data: UploadIn, origin: str
     return UploadOut(asset_id=asset_id, upload_url=url, headers={"Content-Type": data.content_type})
 
 
-def asset_out(asset: MediaAsset, alt_text: str | None = None) -> AssetOut:
+def asset_out(asset: MediaAsset, alt_text: str | None = None, text_overlay: dict[str, Any] | None = None) -> AssetOut:
     v = asset.variants or {}
     return AssetOut(
         id=asset.id, kind=asset.kind, status=asset.status, error=asset.error, width=asset.width, height=asset.height,
         duration=asset.duration, placeholder=asset.placeholder, alt_text=alt_text,
+        text_overlay=TextOverlay.model_validate(text_overlay) if text_overlay else None,
         images=[
             ImageVariant(w=i["w"], avif=public_url(i.get("avif")), webp=public_url(i["webp"]) or "")
             for i in v.get("images", [])

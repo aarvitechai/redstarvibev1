@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.modules.media.schemas import AssetOut
+from app.modules.media.schemas import AssetOut, TextOverlay
 from app.modules.users.schemas import UserBrief
 
 
@@ -15,6 +15,7 @@ class PostCreate(BaseModel):
     visibility: Literal["public", "followers"] = "public"
     is_reel: bool = False
     alt_texts: list[str | None] | None = None
+    text_overlays: list[TextOverlay | None] | None = Field(None, max_length=10)  # same order as asset_ids
     draft: bool = False
     scheduled_at: datetime | None = None
 

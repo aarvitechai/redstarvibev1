@@ -2,6 +2,7 @@
 import { Heart, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { TextOverlayView } from "@/components/post/TextOverlay";
 import { VideoPlayer } from "@/components/post/VideoPlayer";
 import { Avatar, CenterSpinner, Empty } from "@/components/ui";
 import { useInfinite, useSentinel } from "@/hooks/useInfinite";
@@ -20,6 +21,7 @@ function Reel({ post }: { post: Post }) {
   return (
     <section className="relative h-[calc(100dvh-7rem)] snap-start snap-always bg-black sm:h-dvh">
       <VideoPlayer asset={media} onView={onView} className="h-full w-full object-contain" />
+      <TextOverlayView overlay={media.text_overlay} />
       <div className="absolute bottom-16 left-3 right-16 text-white drop-shadow">
         <Link href={`/${post.author.username}`} className="flex items-center gap-2 font-semibold">
           <Avatar user={post.author} size={32} /> {post.author.username}

@@ -4,15 +4,20 @@ import { useRef, useState } from "react";
 import type { Asset } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { MediaImage } from "./MediaImage";
+import { TextOverlayView } from "./TextOverlay";
 import { VideoPlayer } from "./VideoPlayer";
 
 const SIZES = "(max-width: 640px) 100vw, 470px";
 
+/** The feed frame's shape. The composer preview uses it too, so text lands where the author put it. */
+export function frameRatio(width?: number | null, height?: number | null): number {
+  return width && height ? Math.max(0.8, Math.min(1.91, width / height)) : 1;
+}
+
 export function MediaCarousel({ media, priority, onView }: { media: Asset[]; priority?: boolean; onView?: () => void }) {
   const [index, setIndex] = useState(0);
   const track = useRef<HTMLDivElement>(null);
-  const first = media[0];
-  const ratio = first?.width && first?.height ? Math.max(0.8, Math.min(1.91, first.width / first.height)) : 1;
+  const ratio = frameRatio(media[0]?.width, media[0]?.height);
   const go = (i: number) => {
     const el = track.current;
     if (el) el.scrollTo({ left: el.clientWidth * i, behavior: "smooth" });
@@ -25,12 +30,13 @@ export function MediaCarousel({ media, priority, onView }: { media: Asset[]; pri
         className="no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto"
       >
         {media.map((asset, i) => (
-          <div key={asset.id} className="h-full w-full shrink-0 snap-center">
+          <div key={asset.id} className="relative h-full w-full shrink-0 snap-center">
             {asset.kind === "video" ? (
               <VideoPlayer asset={asset} onView={onView} className="h-full w-full object-contain" />
             ) : (
               <MediaImage asset={asset} sizes={SIZES} priority={priority && i === 0} className="h-full w-full object-cover" />
             )}
+            <TextOverlayView overlay={asset.text_overlay} />
           </div>
         ))}
       </div>

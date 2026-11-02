@@ -58,7 +58,7 @@ def _base(post: Post) -> dict[str, Any]:
     return PostOut(
         id=post.id, author=user_service.brief(post.author), caption=post.caption, location=post.location,
         visibility=post.visibility, status=post.status, is_reel=post.is_reel,
-        media=[asset_out(m.asset, m.alt_text) for m in post.media],
+        media=[asset_out(m.asset, m.alt_text, m.text_overlay) for m in post.media],
         like_count=post.like_count, comment_count=post.comment_count, view_count=post.view_count,
         save_count=post.save_count, created_at=post.created_at, scheduled_at=post.scheduled_at,
     ).model_dump(mode="json")
@@ -147,12 +147,16 @@ async def create_post(s: AsyncSession, user: User, data: PostCreate, idempotency
         if data.draft:
             status = "draft"
         alts = data.alt_texts or []
+        overlays = data.text_overlays or []
         post = Post(
             author_id=user.id, caption=data.caption.strip(), location=(data.location or "").strip() or None,
             visibility=data.visibility, is_reel=data.is_reel, status=status, scheduled_at=data.scheduled_at,
         )
         post.media = [
-            PostMedia(asset_id=aid, position=i, alt_text=(alts[i] if i < len(alts) else None))
+            PostMedia(
+                asset_id=aid, position=i, alt_text=(alts[i] if i < len(alts) else None),
+                text_overlay=(overlay.model_dump() if i < len(overlays) and (overlay := overlays[i]) else None),
+            )
             for i, aid in enumerate(data.asset_ids)
         ]
         await repo.add(s, post)
@@ -334,8 +338,8 @@ async def export_user_data(s: AsyncSession, user: User) -> DataExport:
             "created_at": user.created_at.isoformat(),
         },
         posts=[
-            {"id": str(p.id), "caption": p.caption, "location": p.location, "status": p.status,
-             "created_at": p.created_at.isoformat()} for p in posts
+            {"id": str(p.id), "caption": p.caption, "text_on_media": p.overlay_texts, "location": p.location,
+             "status": p.status, "created_at": p.created_at.isoformat()} for p in posts
         ],
         comments=[
             {"id": str(c.id), "post_id": str(c.post_id), "body": c.body, "created_at": c.created_at.isoformat()}
