@@ -1,7 +1,7 @@
 "use client";
-import { Eye, Heart, MessageCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Heart, MessageCircle } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { editStyle } from "@/components/post/mediaEdit";
 import { TextOverlayView } from "@/components/post/TextOverlay";
 import { VideoPlayer } from "@/components/post/VideoPlayer";
@@ -10,6 +10,8 @@ import { useInfinite, useSentinel } from "@/hooks/useInfinite";
 import { api } from "@/lib/api/client";
 import type { Post } from "@/lib/api/types";
 import { cn, compactNumber } from "@/lib/utils";
+
+const ARROW = "flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface hover:bg-line disabled:opacity-40";
 
 function Reel({ post }: { post: Post }) {
   const [liked, setLiked] = useState(post.liked);
@@ -62,14 +64,44 @@ function Reel({ post }: { post: Post }) {
 export default function ReelsPage() {
   const q = useInfinite<Post>(["reels"], "/reels");
   const sentinel = useSentinel(() => q.fetchNextPage(), !!q.hasNextPage && !q.isFetchingNextPage);
+  const list = useRef<HTMLDivElement>(null);
+  const [ends, setEnds] = useState({ top: true, bottom: false });
+  const move = useCallback((direction: 1 | -1) => {
+    const el = list.current;
+    if (el) el.scrollBy({ top: direction * el.clientHeight, behavior: "smooth" });
+  }, []);
+  const onScroll = () => {
+    const el = list.current;
+    if (el) setEnds({ top: el.scrollTop < 8, bottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 8 });
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable=true]")) return;
+      e.preventDefault();
+      move(e.key === "ArrowDown" ? 1 : -1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [move]);
   if (q.isLoading) return <CenterSpinner />;
   if (!q.items.length) return <Empty title="No reels yet" hint="Share a short vertical video from Create." action={<Link href="/new?reel=1" className="font-semibold text-brand">Create a reel</Link>} />;
   return (
-    <div className="no-scrollbar mx-auto h-[calc(100dvh-7rem)] max-w-md snap-y snap-mandatory overflow-y-auto sm:h-dvh">
-      {q.items.map((p) => (
-        <Reel key={p.id} post={p} />
-      ))}
-      <div ref={sentinel} className="h-1" />
+    <div className="relative mx-auto max-w-md">
+      <div ref={list} onScroll={onScroll} className="no-scrollbar h-[calc(100dvh-7rem)] snap-y snap-mandatory overflow-y-auto sm:h-dvh">
+        {q.items.map((p) => (
+          <Reel key={p.id} post={p} />
+        ))}
+        <div ref={sentinel} className="h-1" />
+      </div>
+      <div className="absolute left-full top-1/2 ml-3 hidden -translate-y-1/2 flex-col gap-3 lg:flex">
+        <button type="button" aria-label="Previous reel" disabled={ends.top} onClick={() => move(-1)} className={ARROW}>
+          <ArrowUp aria-hidden className="h-5 w-5" />
+        </button>
+        <button type="button" aria-label="Next reel" disabled={ends.bottom} onClick={() => move(1)} className={ARROW}>
+          <ArrowDown aria-hidden className="h-5 w-5" />
+        </button>
+      </div>
     </div>
   );
 }
