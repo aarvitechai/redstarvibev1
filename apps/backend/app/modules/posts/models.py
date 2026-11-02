@@ -2,14 +2,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB, TSVECTOR, UUID
+from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 
 from app.core.database import Base
 from app.core.ids import uuid7
 from app.modules.media.models import MediaAsset
 from app.modules.users.models import User
+
+EMBEDDING_SIZE = 1024
 
 
 class Post(Base):
@@ -30,6 +33,11 @@ class Post(Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pinned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_capsule: Mapped[bool] = mapped_column(Boolean, default=False)
+    search_text: Mapped[str | None] = deferred(mapped_column(Text))
+    search_tsv: Mapped[Any] = deferred(mapped_column(TSVECTOR))
+    embedding: Mapped[Any] = deferred(mapped_column(Vector(EMBEDDING_SIZE)))
+    embedding_model: Mapped[str | None] = mapped_column(Text)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     author: Mapped[User] = relationship(lazy="joined", innerjoin=True)

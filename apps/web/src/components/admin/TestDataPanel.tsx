@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, CenterSpinner, Empty, ErrorNote, Field, Input, Modal } from "@/components/ui";
+import { useMe } from "@/hooks/useMe";
 import { api, errorMessage } from "@/lib/api/client";
 import type { TestBatch } from "@/lib/api/types";
 import { timeAgo } from "@/lib/utils";
@@ -10,6 +11,7 @@ const BUSY = new Set(["creating", "removing"]);
 const STATUS: Record<string, string> = {
   creating: "Creating...",
   ready: "Live",
+  disabled: "Disabled, hidden from everyone",
   failed: "Failed",
   removing: "Removing...",
   removed: "Removed",
@@ -17,6 +19,8 @@ const STATUS: Record<string, string> = {
 
 export function TestDataPanel() {
   const qc = useQueryClient();
+  const { data: me } = useMe();
+  const superAdmin = me?.role === "superadmin";
   const [form, setForm] = useState({ label: "Test data", users: 10, posts_per_user: 3, reels: 2, stories: 3 });
   const [confirm, setConfirm] = useState<TestBatch | "all" | null>(null);
   const batches = useQuery({
@@ -25,6 +29,7 @@ export function TestDataPanel() {
     refetchInterval: (q) => (q.state.data?.some((b) => BUSY.has(b.status)) ? 2000 : false),
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["test-data"] });
+  const createDemo = useMutation({ mutationFn: () => api("/admin/test-data/demo", { json: {} }), onSuccess: refresh });
   const create = useMutation({ mutationFn: () => api("/admin/test-data", { json: form }), onSuccess: refresh });
   const remove = useMutation({
     mutationFn: (target: TestBatch | "all") =>
@@ -39,7 +44,12 @@ export function TestDataPanel() {
       <Input type="number" min={min} max={max} value={form[key]} onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })} />
     </Field>
   );
-  const live = batches.data?.filter((b) => b.status === "ready" || b.status === "failed") ?? [];
+  const toggle = useMutation({
+    mutationFn: (b: TestBatch) => api(`/admin/test-data/${b.id}/${b.status === "ready" ? "disable" : "enable"}`, { method: "POST" }),
+    onSuccess: refresh,
+  });
+  const removable = (b: TestBatch) => ["ready", "disabled", "failed"].includes(b.status) && (!b.is_demo || superAdmin);
+  const live = batches.data?.filter(removable) ?? [];
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
@@ -69,6 +79,16 @@ export function TestDataPanel() {
           </Button>
         </div>
       </form>
+      {superAdmin && (
+        <section className="space-y-2 rounded-lg border border-line p-3 text-sm" data-testid="demo-card">
+          <h2 className="font-semibold">Large demo set</h2>
+          <p className="text-muted">100 accounts and 20,000 posts with real photos and 20 short videos, plus likes, comments, stories, chats, communities, reports and tickets. Only a super admin can disable or delete it.</p>
+          <ErrorNote message={createDemo.error ? errorMessage(createDemo.error) : null} />
+          <Button variant="secondary" loading={createDemo.isPending} disabled={batches.data?.some((b) => b.is_demo && b.status !== "removed")} onClick={() => createDemo.mutate()}>
+            Add demo set
+          </Button>
+        </section>
+      )}
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">Batches</h2>
         {live.length > 0 && (
@@ -77,7 +97,7 @@ export function TestDataPanel() {
           </Button>
         )}
       </div>
-      <ErrorNote message={remove.error ? errorMessage(remove.error) : null} />
+      <ErrorNote message={remove.error ? errorMessage(remove.error) : toggle.error ? errorMessage(toggle.error) : null} />
       {batches.isLoading ? (
         <CenterSpinner />
       ) : !batches.data?.length ? (
@@ -87,13 +107,18 @@ export function TestDataPanel() {
           {batches.data.map((b) => (
             <li key={b.id} data-testid="batch" className="flex items-center gap-3 rounded-lg border border-line p-3 text-sm">
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{b.label}</p>
+                <p className="truncate font-semibold">{b.label}{b.is_demo ? " (demo set)" : ""}</p>
                 <p className="text-muted">
                   {STATUS[b.status] ?? b.status} · {b.user_count} accounts · {b.post_count} posts · {timeAgo(b.created_at)}
                 </p>
                 {b.error && <p className="text-brand">{b.error}</p>}
               </div>
-              {(b.status === "ready" || b.status === "failed") && (
+              {superAdmin && (b.status === "ready" || b.status === "disabled") && (
+                <Button variant="secondary" loading={toggle.isPending && toggle.variables?.id === b.id} onClick={() => toggle.mutate(b)}>
+                  {b.status === "ready" ? "Disable" : "Enable"}
+                </Button>
+              )}
+              {removable(b) && (
                 <Button variant="danger" onClick={() => setConfirm(b)}>
                   Remove
                 </Button>

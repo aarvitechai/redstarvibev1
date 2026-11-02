@@ -6,11 +6,11 @@ from app.workers.celery_app import celery
 from app.workers.runtime import run
 
 
-@celery.task(name="admin.create_test_batch", time_limit=3600)
+@celery.task(name="admin.create_test_batch", time_limit=14400)
 def create_test_batch(batch_id: str) -> None:
     run(test_data.create_batch(uuid.UUID(batch_id)))
 
 
-@celery.task(name="admin.remove_test_batch", time_limit=3600)
+@celery.task(name="admin.remove_test_batch", time_limit=14400)
 def remove_test_batch(batch_id: str) -> None:
     run(test_data.remove_batch(uuid.UUID(batch_id)))

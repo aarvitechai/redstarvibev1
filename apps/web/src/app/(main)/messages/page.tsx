@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Avatar, Button, CenterSpinner, Empty, ErrorNote, Field, Input, Modal, UserRow } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import { api, errorMessage } from "@/lib/api/client";
-import type { Conversation, Me, SearchResults, UserBrief } from "@/lib/api/types";
+import type { Conversation, Me, Page, UserBrief } from "@/lib/api/types";
 import { cn, timeAgo } from "@/lib/utils";
 
 function conversationName(c: Conversation, me?: Me | null) {
@@ -36,7 +36,7 @@ function NewChat({ onClose }: { onClose: () => void }) {
     const t = setTimeout(() => setDebounced(q.trim()), 250);
     return () => clearTimeout(t);
   }, [q]);
-  const found = useQuery({ queryKey: ["search", debounced], enabled: !!debounced, queryFn: () => api<SearchResults>(`/search?q=${encodeURIComponent(debounced)}`) });
+  const found = useQuery({ queryKey: ["search", debounced], enabled: !!debounced, queryFn: () => api<Page<UserBrief>>(`/search?q=${encodeURIComponent(debounced)}&type=users`) });
   const start = async () => {
     setBusy(true);
     setError(null);
@@ -62,7 +62,7 @@ function NewChat({ onClose }: { onClose: () => void }) {
           </ul>
         )}
         <Input aria-label="Search people" placeholder="Search people" value={q} autoFocus onChange={(e) => setQ(e.target.value)} />
-        {found.data?.users?.filter((u) => !picked.some((p) => p.id === u.id)).map((u) => (
+        {found.data?.items.filter((u) => !picked.some((p) => p.id === u.id)).map((u) => (
           <button key={u.id} className="block w-full text-left" onClick={() => { setPicked([...picked, u]); setQ(""); }}>
             <span className="pointer-events-none block"><UserRow user={u} /></span>
           </button>

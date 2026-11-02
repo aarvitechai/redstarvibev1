@@ -1,3 +1,4 @@
+import time
 import uuid
 
 from app.ai.embeddings.provider import hash_embed
@@ -54,6 +55,35 @@ def test_magic_bytes_not_extension():
 def test_age_gate():
     assert is_old_enough(__import__("datetime").date(2000, 1, 1))
     assert not is_old_enough(__import__("datetime").date.today())
+
+
+def test_rrf_merges_duplicates_in_a_stable_order():
+    from app.modules.search.ranking import merge
+
+    now = int(time.time() * 1000)
+    a, b, c = uuid7(), uuid7(), uuid7()
+    assert merge([[a, b], [c, a]], now)[0] == a  # high in both lists wins
+    assert len(merge([[a, b], [c, a]], now)) == 3
+    assert merge([[a, b], [c, a]], now) == merge([[a, b], [c, a]], now)
+    assert merge([[], []], now) == []
+
+
+def test_caption_parser_rejects_bad_model_output():
+    from app.ai.writing import parse_suggestions
+
+    for bad in (None, "", "no json", "[1, 2]", '{"captions": []}', '{"captions": "text"}', '{"captions": [1, " "]}'):
+        assert parse_suggestions(bad) is None
+    raw = '{"captions": ["One", "Two", "Three", "Four"], "tagline": "Go", "hashtags": ["#Beach", "a b", "x"]}'
+    good = parse_suggestions(f"Sure! {raw}")
+    assert good == {"captions": ["One", "Two", "Three"], "tagline": "Go", "hashtags": ["beach", "x"]}
+
+
+def test_query_normalized():
+    from app.modules.search.service import normalize
+
+    assert normalize("  #Goa Beach ") == "goa beach"
+    assert normalize("@" + "x" * 200) == "x" * 100
+    assert normalize(" # ") == ""
 
 
 def test_rules_moderation():

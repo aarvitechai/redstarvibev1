@@ -37,7 +37,7 @@ async def _write_guard(s: Any, user: User, tool: str, target: str | None) -> Non
 async def search_posts(user_id: uuid.UUID, query: str, limit: int = 10) -> dict[str, Any]:
     async with SessionLocal() as s:
         user = await _user(s, user_id)
-        found = await search.image_search(s, user, query, min(limit, 25))
+        found = await search.search_posts(s, user, query, min(limit, 25))
         own = await retrieve(s, user.id, query, 5)
         return {
             "posts": [

@@ -25,6 +25,7 @@ celery.conf.update(
         "purge-stories": {"task": "feed.purge_stories", "schedule": crontab(minute=7)},
         "purge-accounts": {"task": "feed.purge_accounts", "schedule": crontab(hour=3, minute=17)},
         "ensure-partitions": {"task": "feed.ensure_partitions", "schedule": crontab(day_of_month="1", hour=1, minute=5)},
+        "backfill-search": {"task": "ai.backfill_search", "schedule": crontab(hour=2, minute=41)},
         "ingest-help": {"task": "ai.ingest_help", "schedule": crontab(hour=2, minute=11)},
     },
 )

@@ -1,6 +1,4 @@
 """Vibe AI assistant, auto captions and creator insights."""
-import base64
-import uuid
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -9,12 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import llm_client
 from app.ai.rag.generator import answer
 from app.ai.safety.pii import redact
-from app.ai.vision.caption import caption_image_bytes
 from app.core.cache import get_redis
 from app.core.config import settings
-from app.core.errors import AppError, not_found
-from app.core.storage import internal
-from app.modules.media import repository as media_repo
+from app.core.errors import AppError
 from app.modules.moderation.repository import log_ai
 from app.modules.posts import repository as post_repo
 from app.modules.posts import service as posts
@@ -36,16 +31,6 @@ class AskOut(BaseModel):
     answer: str
     citations: list[Citation]
     llm_used: bool
-
-
-class CaptionOut(BaseModel):
-    caption: str
-    hashtags: list[str]
-    alt_text: str
-
-
-class CaptionIn(BaseModel):
-    asset_id: uuid.UUID
 
 
 class InsightsOut(BaseModel):
@@ -79,23 +64,6 @@ async def ask(s: AsyncSession, user: User, question: str) -> AskOut:
             for c in result.chunks
         ],
     )
-
-
-async def suggest_caption(s: AsyncSession, user: User, asset_id: uuid.UUID) -> CaptionOut:
-    asset = await media_repo.get(s, asset_id)
-    if asset is None or asset.owner_id != user.id:
-        raise not_found("Upload")
-    if not llm_client.is_configured():
-        raise AppError(503, "ai_not_configured", "Auto captions need ANTHROPIC_API_KEY to be set on the server")
-    await consume_quota(user)
-    if asset.status != "ready" or not asset.variants:
-        raise AppError(409, "media_not_ready", "That upload is still processing")
-    key = asset.variants.get("poster") or asset.variants["images"][-1]["webp"]
-    data = internal().get_object(Bucket=settings.s3_public_bucket, Key=key)["Body"].read()
-    result = await caption_image_bytes(base64.b64encode(data).decode(), "image/webp")
-    await log_ai(s, "caption", asset.id, user.id, settings.anthropic_model, str(result["caption"]))
-    await s.commit()
-    return CaptionOut.model_validate(result)
 
 
 async def creator_insights(s: AsyncSession, user: User) -> InsightsOut:

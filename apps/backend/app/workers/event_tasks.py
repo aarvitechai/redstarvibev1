@@ -7,6 +7,7 @@ from app import models  # noqa: F401
 from app.ai.rag.ingest import delete_entity, upsert_entity
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.events import enqueue
 from app.modules.chat import repository as chat
 from app.modules.comments import repository as comments
 from app.modules.feed import service as feed
@@ -42,6 +43,7 @@ async def _dispatch(name: str, d: dict[str, str]) -> None:
             else:
                 await feed.fan_out(post.id, [post.author_id])
             await notify(s, post.author_id, "post_published", None, post.id)
+            await enqueue("ai.index_post", post.id, queue="ai")
             for user in await users.by_usernames(s, extract_mentions(post.caption)):
                 if not await users.is_blocked_either_way(s, post.author_id, user.id):
                     await notify(s, user.id, "mention", post.author_id, post.id)
@@ -49,6 +51,8 @@ async def _dispatch(name: str, d: dict[str, str]) -> None:
                 await notify(s, user.id, "tagged", post.author_id, post.id)
             if post.collab and post.collab.status == "pending":
                 await notify(s, post.collab.user_id, "collab_invite", post.author_id, post.id)
+        elif name == "post.updated":
+            await enqueue("ai.index_post", d["post_id"], queue="ai")
         elif name == "post.collab_accepted":
             post = await post_repo.get(s, uuid.UUID(d["post_id"]))
             partner = uuid.UUID(d["user_id"])

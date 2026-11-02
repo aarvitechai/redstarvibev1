@@ -140,9 +140,10 @@ async def test_search_finds_users_and_tags(make_user, make_post):
     async with SessionLocal() as s:
         await repo.link_hashtags(s, uuid.UUID(post), ["uniquetagx"])
         await s.commit()
-    res = (await a.get("/search", params={"q": a.username})).json()
-    assert a.username in [u["username"] for u in res["users"]]
-    assert "uniquetagx" in [h["tag"] for h in (await a.get("/search", params={"q": "uniquetag"})).json()["hashtags"]]
+    res = (await a.get("/search", params={"q": a.username, "type": "users"})).json()
+    assert a.username in [u["username"] for u in res["items"]]
+    tags = (await a.get("/search", params={"q": "uniquetag", "type": "tags"})).json()["items"]
+    assert "uniquetagx" in [h["tag"] for h in tags]
     assert post in [p["id"] for p in (await a.get("/hashtags/uniquetagx/posts")).json()["items"]]
 
 

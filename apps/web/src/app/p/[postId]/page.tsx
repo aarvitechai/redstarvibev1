@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
 import { PostCard } from "@/components/post/PostCard";
+import { SimilarPosts } from "@/components/post/SimilarPosts";
 import { CenterSpinner, Empty } from "@/components/ui";
 import { useMe } from "@/hooks/useMe";
 import { api } from "@/lib/api/client";
@@ -30,7 +31,7 @@ export default function PostPage() {
           <img src="/brand/logo.png" alt="" width={28} height={28} /> RedStarVibe
         </Link>
       </nav>
-      {q.isLoading ? <CenterSpinner /> : q.data ? <PostCard post={q.data} standalone priority /> : <Empty title="This post is not available" hint="It may have been removed, or the account is private." />}
+      {q.isLoading ? <CenterSpinner /> : q.data ? <><PostCard post={q.data} standalone priority /><SimilarPosts postId={postId} /></> : <Empty title="This post is not available" hint="It may have been removed, or the account is private." />}
     </main>
   );
 }

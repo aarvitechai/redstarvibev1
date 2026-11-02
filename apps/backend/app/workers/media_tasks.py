@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app import models  # noqa: F401
+from app.ai.writing import captions_enabled
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.events import enqueue
@@ -270,7 +271,8 @@ async def _process(s: Any, asset: MediaAsset, work: Path) -> None:
 
 @celery.task(name="media.process_asset", time_limit=3600)
 def process_asset_task(asset_id: str) -> None:
-    run(process_asset(uuid.UUID(asset_id)))
+    if run(process_asset(uuid.UUID(asset_id))) and captions_enabled():
+        run(enqueue("ai.suggest_captions", asset_id, queue="ai"))
 
 
 async def _process_post(post_id: uuid.UUID) -> None:

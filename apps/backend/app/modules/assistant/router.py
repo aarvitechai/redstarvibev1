@@ -1,7 +1,9 @@
+import uuid
+
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, Db
-from app.modules.assistant import service
+from app.modules.assistant import service, suggestions
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -11,9 +13,24 @@ async def assistant(data: service.AskIn, me: CurrentUser, s: Db) -> service.AskO
     return await service.ask(s, me, data.question)
 
 
-@router.post("/caption", response_model=service.CaptionOut)
-async def caption(data: service.CaptionIn, me: CurrentUser, s: Db) -> service.CaptionOut:
-    return await service.suggest_caption(s, me, data.asset_id)
+@router.get("/features", response_model=suggestions.Features)
+async def features() -> suggestions.Features:
+    return suggestions.features()
+
+
+@router.get("/captions/{asset_id}", response_model=suggestions.CaptionsOut)
+async def captions(asset_id: uuid.UUID, me: CurrentUser, s: Db) -> suggestions.CaptionsOut:
+    return await suggestions.captions(s, me, asset_id)
+
+
+@router.post("/rewrite", response_model=suggestions.RewriteOut)
+async def rewrite(data: suggestions.RewriteIn, me: CurrentUser) -> suggestions.RewriteOut:
+    return await suggestions.rewrite(me, data)
+
+
+@router.post("/hashtags", response_model=suggestions.HashtagsOut)
+async def hashtags(data: suggestions.HashtagsIn, me: CurrentUser) -> suggestions.HashtagsOut:
+    return await suggestions.hashtags(me, data)
 
 
 @router.get("/insights", response_model=service.InsightsOut)

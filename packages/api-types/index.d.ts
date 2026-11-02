@@ -1672,15 +1672,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/search/images": {
+    "/api/v1/search/suggest": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Images */
-        get: operations["images_api_v1_search_images_get"];
+        /** Suggest */
+        get: operations["suggest_api_v1_search_suggest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posts/{post_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Similar */
+        get: operations["similar_api_v1_posts__post_id__similar_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1911,6 +1928,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/test-data/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Demo Data */
+        post: operations["create_demo_data_api_v1_admin_test_data_demo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/{batch_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Test Data */
+        post: operations["disable_test_data_api_v1_admin_test_data__batch_id__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/test-data/{batch_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Test Data */
+        post: operations["enable_test_data_api_v1_admin_test_data__batch_id__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/test-data/{batch_id}": {
         parameters: {
             query?: never;
@@ -1996,7 +2064,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ai/caption": {
+    "/api/v1/ai/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Features */
+        get: operations["features_api_v1_ai_features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/captions/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Captions */
+        get: operations["captions_api_v1_ai_captions__asset_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/rewrite": {
         parameters: {
             query?: never;
             header?: never;
@@ -2005,8 +2107,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Caption */
-        post: operations["caption_api_v1_ai_caption_post"];
+        /** Rewrite */
+        post: operations["rewrite_api_v1_ai_rewrite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/hashtags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hashtags */
+        post: operations["hashtags_api_v1_ai_hashtags_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2765,6 +2884,11 @@ export interface components {
             created_at: string;
             /** Removed At */
             removed_at: string | null;
+            /**
+             * Is Demo
+             * @default false
+             */
+            is_demo: boolean;
         };
         /** CallCreate */
         CallCreate: {
@@ -2804,22 +2928,25 @@ export interface components {
             /** Next Unlock At */
             next_unlock_at: string | null;
         };
-        /** CaptionIn */
-        CaptionIn: {
+        /** CaptionsOut */
+        CaptionsOut: {
             /**
-             * Asset Id
-             * Format: uuid
+             * Status
+             * @enum {string}
              */
-            asset_id: string;
-        };
-        /** CaptionOut */
-        CaptionOut: {
-            /** Caption */
-            caption: string;
-            /** Hashtags */
+            status: "disabled" | "pending" | "ready" | "failed";
+            /**
+             * Captions
+             * @default []
+             */
+            captions: string[];
+            /** Tagline */
+            tagline?: string | null;
+            /**
+             * Hashtags
+             * @default []
+             */
             hashtags: string[];
-            /** Alt Text */
-            alt_text: string;
         };
         /** Citation */
         Citation: {
@@ -3116,6 +3243,14 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** DemoIn */
+        DemoIn: {
+            /**
+             * Label
+             * @default Demo data
+             */
+            label: string;
+        };
         /** EmailIn */
         EmailIn: {
             /**
@@ -3123,6 +3258,15 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** Features */
+        Features: {
+            /** Semantic Search */
+            semantic_search: boolean;
+            /** Writing */
+            writing: boolean;
+            /** Captions */
+            captions: boolean;
         };
         /** FollowResult */
         FollowResult: {
@@ -3140,6 +3284,24 @@ export interface components {
             tag: string;
             /** Post Count */
             post_count: number;
+        };
+        /** HashtagsIn */
+        HashtagsIn: {
+            /** Text */
+            text: string;
+        };
+        /** HashtagsOut */
+        HashtagsOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "ready" | "failed";
+            /**
+             * Hashtags
+             * @default []
+             */
+            hashtags: string[];
         };
         /** HighlightIn */
         HighlightIn: {
@@ -3468,6 +3630,13 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** Page[HashtagOut] */
+        Page_HashtagOut_: {
+            /** Items */
+            items: components["schemas"]["HashtagOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** Page[MessageOut] */
         Page_MessageOut_: {
             /** Items */
@@ -3479,6 +3648,13 @@ export interface components {
         Page_NotificationOut_: {
             /** Items */
             items: components["schemas"]["NotificationOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[PlaceOut] */
+        Page_PlaceOut_: {
+            /** Items */
+            items: components["schemas"]["PlaceOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
         };
@@ -3924,6 +4100,26 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** RewriteIn */
+        RewriteIn: {
+            /** Text */
+            text: string;
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "fun" | "short" | "hinglish";
+        };
+        /** RewriteOut */
+        RewriteOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "disabled" | "ready" | "failed";
+            /** Text */
+            text?: string | null;
+        };
         /** RoleIn */
         RoleIn: {
             /**
@@ -3937,28 +4133,12 @@ export interface components {
             /** Collection Id */
             collection_id?: string | null;
         };
-        /** SearchResults */
-        SearchResults: {
-            /**
-             * Users
-             * @default []
-             */
+        /** SearchSuggest */
+        SearchSuggest: {
+            /** Users */
             users: components["schemas"]["UserBrief"][];
-            /**
-             * Hashtags
-             * @default []
-             */
-            hashtags: components["schemas"]["HashtagOut"][];
-            /**
-             * Places
-             * @default []
-             */
-            places: components["schemas"]["PlaceOut"][];
-            /**
-             * Posts
-             * @default []
-             */
-            posts: components["schemas"]["PostOut"][];
+            /** Tags */
+            tags: components["schemas"]["HashtagOut"][];
         };
         /** SignupIn */
         SignupIn: {
@@ -7734,6 +7914,9 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
+                type?: "posts" | "users" | "tags" | "places";
+                cursor?: string | null;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -7747,7 +7930,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SearchResults"];
+                    "application/json": components["schemas"]["Page_PostOut_"] | components["schemas"]["Page_UserBrief_"] | components["schemas"]["Page_HashtagOut_"] | components["schemas"]["Page_PlaceOut_"];
                 };
             };
             /** @description Validation Error */
@@ -7761,13 +7944,46 @@ export interface operations {
             };
         };
     };
-    images_api_v1_search_images_get: {
+    suggest_api_v1_search_suggest_get: {
         parameters: {
             query: {
                 q: string;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchSuggest"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    similar_api_v1_posts__post_id__similar_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                post_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -8214,6 +8430,101 @@ export interface operations {
             };
         };
     };
+    create_demo_data_api_v1_admin_test_data_demo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_test_data_api_v1_admin_test_data__batch_id__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_test_data_api_v1_admin_test_data__batch_id__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     remove_test_data_api_v1_admin_test_data__batch_id__delete: {
         parameters: {
             query?: never;
@@ -8364,7 +8675,58 @@ export interface operations {
             };
         };
     };
-    caption_api_v1_ai_caption_post: {
+    features_api_v1_ai_features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Features"];
+                };
+            };
+        };
+    };
+    captions_api_v1_ai_captions__asset_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rewrite_api_v1_ai_rewrite_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -8373,7 +8735,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CaptionIn"];
+                "application/json": components["schemas"]["RewriteIn"];
             };
         };
         responses: {
@@ -8383,7 +8745,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CaptionOut"];
+                    "application/json": components["schemas"]["RewriteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hashtags_api_v1_ai_hashtags_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HashtagsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HashtagsOut"];
                 };
             };
             /** @description Validation Error */

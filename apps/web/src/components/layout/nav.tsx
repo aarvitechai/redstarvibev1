@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SearchBox } from "@/components/search/SearchBox";
 import { Avatar } from "@/components/ui";
 import type { Me } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -112,6 +113,7 @@ export function SideNav({ me, counts }: { me: Me; counts: Counts }) {
         <img src="/brand/logo.png" alt="" width={34} height={34} />
         <span className="hidden text-lg font-bold lg:inline">RedStarVibe</span>
       </Link>
+      <div className="mb-2 hidden lg:block"><SearchBox /></div>
       <ul className="flex-1 space-y-0.5">
         {items(counts, me).map((item) => {
           const active = isActive(path, item.href);

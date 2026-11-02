@@ -21,7 +21,7 @@ class User(Base):
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending active suspended deleting
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending active suspended deleting disabled
     role: Mapped[str] = mapped_column(String(20), default="user")  # user business staff admin superadmin
     totp_secret_encrypted: Mapped[str | None] = mapped_column(Text)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

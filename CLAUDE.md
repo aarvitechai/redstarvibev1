@@ -83,7 +83,9 @@ Migrations live in `apps/backend/migrations/versions`, numbered by hand. The `mi
 
 **Text on media:** `post_media.text_overlay` stores one text per photo or video as JSON, drawn by `TextOverlay.tsx` with percent positions and `cqw` font sizes. It is not burned into the pixels. Moderation and indexing must read `Post.full_text`, not `caption`.
 
-**Test data** (`app/modules/admin/test_data.py`): generated accounts carry `users.test_batch_id` and are removed only by batch. They publish directly, skipping moderation and notifications. Seed accounts are not batches.
+**Search:** `modules/search` merges `posts.search_tsv` (keyword) and `posts.embedding` (pgvector) with RRF in `ranking.py`. Visibility runs in SQL. Only anonymous results are cached. `ai.index_post` and the nightly `ai.backfill_search` fill the columns. Models run on Cloudflare Workers AI (`app/ai/workers_ai.py`), never on this machine. `AI_PROVIDER` chooses `none`, `cloudflare` or `anthropic`.
+
+**Test data** (`app/modules/admin/test_data.py`): generated accounts carry `users.test_batch_id` and are removed only by batch. They publish directly, skipping moderation and notifications. Seed accounts are not batches. The large demo set (`demo_data.py`) also links to the `demo` and `owner` seed accounts. Only a super admin can disable or delete it. Disabling sets its users' status to `disabled`, and visibility rules do the rest. While it exists, `make test` fails with `demo_exists` and can leave it stuck, so run backend tests against a separate database.
 
 **Optional features degrade when unconfigured.** The Claude model client is `app/ai/llm_client.py`. `ANTHROPIC_API_KEY`, the `--extra ai` build, Google sign in, Turnstile and ClamAV are all optional, and the README lists what each does without configuration. Without a key, images are not moderated. `Settings` in `app/core/config.py` refuses to start in staging or production with weak secrets.
 

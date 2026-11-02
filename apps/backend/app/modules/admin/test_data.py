@@ -10,8 +10,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.embeddings.provider import embed_query, model_name
-from app.ai.models import Embedding
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.errors import AppError, conflict, forbidden, not_found
@@ -62,12 +60,13 @@ class BatchOut(BaseModel):
     post_count: int
     created_at: datetime
     removed_at: datetime | None
+    is_demo: bool = False
 
 
 def batch_out(b: TestDataBatch) -> BatchOut:
     return BatchOut(
         id=b.id, label=b.label, status=b.status, error=b.error, user_count=b.user_count, post_count=b.post_count,
-        created_at=b.created_at, removed_at=b.removed_at,
+        created_at=b.created_at, removed_at=b.removed_at, is_demo=(b.params or {}).get("kind") == "demo",
     )
 
 
@@ -97,15 +96,35 @@ async def request_remove(s: AsyncSession, admin: User, batch_id: uuid.UUID, ip: 
     batch = await repo.get_batch(s, batch_id)
     if batch is None:
         raise not_found("Batch")
-    stuck = batch.status == "creating" and datetime.now(UTC) - batch.created_at > timedelta(hours=1)
-    if batch.status not in {"ready", "failed"} and not stuck:
+    if (batch.params or {}).get("kind") == "demo" and admin.role != "superadmin":
+        raise forbidden("Only a super admin can remove the demo set")
+    stuck = batch.status == "creating" and datetime.now(UTC) - batch.created_at > timedelta(hours=5)
+    if batch.status not in {"ready", "disabled", "failed"} and not stuck:
         raise conflict("batch_busy", f"This batch cannot be removed while it is {batch.status}")
     await _start_removal(s, admin, batch, ip)
     return batch_out(batch)
 
 
+async def set_disabled(s: AsyncSession, admin: User, batch_id: uuid.UUID, disabled: bool, ip: str | None) -> BatchOut:
+    """Hides a batch without deleting it. Enabling brings everything back."""
+    batch = await repo.get_batch(s, batch_id)
+    if batch is None:
+        raise not_found("Batch")
+    if batch.status != ("ready" if disabled else "disabled"):
+        raise conflict("batch_busy", f"This batch cannot change while it is {batch.status}")
+    await repo.set_batch_user_status(s, batch_id, "disabled" if disabled else "active")
+    batch.status = "disabled" if disabled else "ready"
+    await users.audit(s, admin.id, f"admin.test_data.{'disable' if disabled else 'enable'}", str(batch.id), ip)
+    await s.commit()
+    for follower in await repo.real_follower_ids(s, batch_id):  # stored feeds hold post ids, so rebuild them
+        await invalidate_feed(follower)
+    return batch_out(batch)
+
+
 async def request_remove_all(s: AsyncSession, admin: User, ip: str | None) -> int:
     batches = await repo.removable_batches(s)
+    if admin.role != "superadmin":  # the large demo set belongs to the super admin
+        batches = [b for b in batches if (b.params or {}).get("kind") != "demo"]
     for batch in batches:
         await _start_removal(s, admin, batch, ip)
     return len(batches)
@@ -155,10 +174,6 @@ async def _publish(s: AsyncSession, author: User, asset: MediaAsset, caption: st
     await s.flush()
     await post_repo.link_hashtags(s, post.id, extract_hashtags(caption))
     await users.bump_counts(s, author.id, post_count=1)
-    s.add(Embedding(
-        entity_type="post", entity_id=str(post.id), owner_id=author.id, chunk=caption,
-        model=model_name(), vector=await embed_query(caption),
-    ))
     await s.commit()
     return post
 
@@ -189,6 +204,14 @@ async def create_batch(batch_id: uuid.UUID) -> None:
             return
         p = batch.params
         try:
+            if p.get("kind") == "demo":
+                from app.modules.admin import demo_data
+
+                await demo_data.create(s, batch)
+                batch.status = "ready"
+                await s.commit()
+                await enqueue("ai.backfill_search", queue="ai")
+                return
             people: list[User] = []
             for i in range(p["users"]):
                 # No password and an undeliverable address (RFC 2606), so nobody can log in as a test account.
@@ -235,6 +258,7 @@ async def create_batch(batch_id: uuid.UUID) -> None:
             await _add_engagement(s, people, rows, 3)
             batch.status = "ready"
             await s.commit()
+            await enqueue("ai.backfill_search", queue="ai")
         except Exception as exc:
             await s.rollback()
             batch = await repo.get_batch(s, batch_id)

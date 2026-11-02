@@ -68,7 +68,8 @@ test("touch targets on the mobile nav are at least 44 px", async ({ page }) => {
 test("search finds a user and a profile opens", async ({ page }) => {
   await login(page);
   await page.goto("/search");
-  await page.getByRole("textbox", { name: "Search" }).fill("asha");
+  await page.getByRole("textbox", { name: "Search", exact: true }).fill("asha");
+  await page.getByRole("tab", { name: "People" }).click();
   await page.getByRole("link", { name: /asha/ }).first().click();
   await expect(page.getByRole("heading", { name: "asha" })).toBeVisible();
 });

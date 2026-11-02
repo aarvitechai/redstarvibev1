@@ -15,7 +15,7 @@ class TestDataBatch(Base):
     __test__ = False  # not a pytest class
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     label: Mapped[str] = mapped_column(String(80))
-    status: Mapped[str] = mapped_column(String(12), default="creating")  # creating ready failed removing removed
+    status: Mapped[str] = mapped_column(String(12), default="creating")  # creating ready disabled failed removing removed
     error: Mapped[str | None] = mapped_column(String(300))
     params: Mapped[dict[str, Any]] = mapped_column(JSONB)
     user_count: Mapped[int] = mapped_column(Integer, default=0)

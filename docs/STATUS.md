@@ -25,6 +25,7 @@ running stack. "Written, not run" means the code or config exists but nothing ha
 - 1:1 video call through a real LiveKit server, video flowing both ways (with Chromium fake cameras)
 - MCP server: OAuth 2.1 with PKCE, 7 tools, scope enforcement (`scripts/verify_mcp.py`)
 - Vibe AI retrieval with tenant isolation, answering by quoting sources
+- Large demo set on the real stack: 100 accounts, 20,000 posts, 20 short videos. Super admin disable, enable and delete through the API, with admins refused. Video playback in Chromium.
 - Responsive layout at 360, 768 and 1280 px, no horizontal scroll, 44 px touch targets on the mobile nav, strict CSP
 
 ## Written, not run
@@ -35,15 +36,31 @@ These need something this machine did not have.
 |---|---|
 | Chat translation | `ANTHROPIC_API_KEY`. Tested with a stand-in for Claude only. |
 | Claude features: auto captions, LLM moderation, generated assistant answers, LLM insights | `ANTHROPIC_API_KEY` |
-| BGE-M3, OpenCLIP, faster-whisper | Image built with `--extra ai`, plus model downloads |
+| faster-whisper | Image built with `--extra ai`, plus a model download |
+| Semantic and hybrid search, similar posts, writing helper, photo captions and tagline | `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN`. Tested with stand-ins for Cloudflare only. The photo request format has never been sent to the real model. |
+| 30 golden search queries (`test_search_golden.py`) | Real Cloudflare keys in `GOLDEN_ACCOUNT` and `GOLDEN_TOKEN`. Skipped without them. |
+| k6 search run (`tests/load/search.js`): p95 under 200 ms keyword, under 400 ms hybrid | A running stack and k6. Not measured. |
 | Google sign in, Turnstile | Credentials |
 | Web push delivery | HTTPS and a real browser push service. Subscribing code and sending code exist. |
 | Cloudflare R2, LiveKit Cloud, real SMTP | Accounts. The same S3, LiveKit and SMTP code paths are exercised against local stand-ins. |
 | GitHub Actions, Terraform, Helm, Argo CD, staging and production deploy | A GitHub repo, cloud accounts and a cluster |
 | ClamAV scanning, Prometheus, Grafana and Loki profiles | `--profile av`, `--profile monitoring` |
 
-Also not exercised in a browser test: stories viewer, group calls, audio calls, live streaming, reels feed scrolling, admin actions,
+The demo set has no capsules, drafts, calls, live streams, post filters or AI suggestions. Its 200 photos repeat across posts, and its stories expire after 24 hours. Disabling it hides posts, stories and profiles, but comments and chat messages from its accounts are not filtered.
+
+Also not exercised in a browser test: disable and enable buttons, stories viewer, group calls, audio calls, live streaming, reels feed scrolling, admin actions,
 MCP write tools, draft and schedule flow. Their API rules are partly covered by the backend tests.
+
+## Known test failures
+
+Run on 2026-11-02 against a fresh stack, with AI off.
+
+| Test | Cause |
+|---|---|
+| `test_purge_removes_a_user_who_has_conversations_and_likes` under `make test` | `make test` does not pass `S3_ENDPOINT` or the S3 keys. Passes when they are set. |
+| `search.spec.ts`, search page, at 360, 768 and 1280 px | Expects "deem" to find `demo`. Trigram similarity is 0.25, under the 0.3 limit. "deme" and "demoo" do find it, "dmeo" does not. |
+| `search.spec.ts`, header search box | Expects a `travel` tag, but the seed data has no post with it. |
+| `admin.spec.ts`, test data | Reads `users` from `/search`, which now returns `items` and needs `type=users`. |
 
 ## Not built, or built differently from the guide
 
@@ -64,6 +81,7 @@ MCP write tools, draft and schedule flow. Their API rules are partly covered by 
 | Testcontainers | Tests run against the compose stack or CI service containers | Simpler on Windows |
 | `likes` time partitioned | Hash partitioned | See ADR 0003 |
 | MinIO or R2 locally | SeaweedFS | See ADR 0005 |
+| AI search plan: Ollama with `bge-m3` and Gemma, AI levels by server RAM | Cloudflare Workers AI with `bge-m3` and Llama. No model on this machine. Post text and photos go to Cloudflare. | See ADR 0006 |
 
 ## Targets
 

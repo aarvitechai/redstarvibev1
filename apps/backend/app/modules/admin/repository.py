@@ -1,9 +1,10 @@
 import uuid
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.admin.models import TestDataBatch
+from app.modules.chat.models import Conversation, Message
 from app.modules.follows.models import Follow
 from app.modules.moderation.models import Report
 from app.modules.notifications.models import Notification
@@ -28,13 +29,26 @@ async def list_batches(s: AsyncSession, limit: int = 100) -> list[TestDataBatch]
 
 
 async def removable_batches(s: AsyncSession) -> list[TestDataBatch]:
-    q = select(TestDataBatch).where(TestDataBatch.status.in_(["ready", "failed"]))
+    q = select(TestDataBatch).where(TestDataBatch.status.in_(["ready", "disabled", "failed"]))
+    return list((await s.execute(q)).scalars())
+
+
+async def set_batch_user_status(s: AsyncSession, batch_id: uuid.UUID, status: str) -> None:
+    """Visibility rules already check the author's status, so this hides their posts, stories and profiles everywhere."""
+    await s.execute(update(User).where(User.test_batch_id == batch_id).values(status=status))
+
+
+async def real_follower_ids(s: AsyncSession, batch_id: uuid.UUID) -> list[uuid.UUID]:
+    in_batch = select(User.id).where(User.test_batch_id == batch_id)
+    real = select(User.id).where(User.test_batch_id.is_(None))
+    q = select(Follow.follower_id).where(Follow.followee_id.in_(in_batch), Follow.follower_id.in_(real)).distinct()
     return list((await s.execute(q)).scalars())
 
 
 async def batch_user_ids(s: AsyncSession, batch_id: uuid.UUID) -> list[uuid.UUID]:
     """The only source of what gets deleted: accounts explicitly stamped with this batch."""
-    q = select(User.id).where(User.test_batch_id == batch_id)
+    # Newest first: in a demo set the first account owns the shared media, so it must go last.
+    q = select(User.id).where(User.test_batch_id == batch_id).order_by(User.id.desc())
     return list((await s.execute(q)).scalars())
 
 
@@ -47,12 +61,14 @@ async def follower_ids(s: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
 
 
 async def delete_references(s: AsyncSession, user_id: uuid.UUID, post_ids: list[uuid.UUID]) -> None:
-    """Notifications and reports hold plain ids, so nothing cascades to them."""
-    from sqlalchemy import delete
-
+    """Notifications, reports and messages hold plain ids, so nothing cascades to them."""
     targets = [user_id, *post_ids]
     await s.execute(delete(Notification).where(Notification.entity_id.in_(post_ids)))
     await s.execute(delete(Report).where(Report.entity_id.in_(targets)))
+    # Chats a test account started, including replies from real accounts, so no empty chat stays in their inbox.
+    started = select(Conversation.id).where(Conversation.created_by == user_id)
+    await s.execute(delete(Message).where(Message.conversation_id.in_(started)))
+    await s.execute(delete(Conversation).where(Conversation.created_by == user_id))
 
 
 async def find_users(s: AsyncSession, q: str, limit: int = 30) -> list[User]:

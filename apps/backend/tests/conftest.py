@@ -7,6 +7,8 @@ import pytest
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("BREACHED_PASSWORD_CHECK", "false")
+os.environ.setdefault("CLOUDFLARE_ACCOUNT_ID", "test")  # AI stays off until a test sets the provider
+os.environ.setdefault("CLOUDFLARE_AI_TOKEN", "test")
 
 from app.main import app  # noqa: E402
 

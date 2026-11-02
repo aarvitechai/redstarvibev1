@@ -1,15 +1,16 @@
 "use client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ImagePlus, Sparkles, Type, X } from "lucide-react";
+import { ImagePlus, Type, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
+import { CaptionChips, ImproveCaption, useAiFeatures, useCaptionSuggestions } from "@/components/post/AiWriting";
 import { frameRatio } from "@/components/post/MediaCarousel";
 import { isEdited } from "@/components/post/mediaEdit";
 import { TextOverlayEditor } from "@/components/post/TextOverlayEditor";
 import { Button, ErrorNote, Field, Input, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api/client";
-import type { CaptionOut, MediaEdit, Post, TextOverlay } from "@/lib/api/types";
+import type { MediaEdit, Post, TextOverlay } from "@/lib/api/types";
 import { uploadAsset } from "@/lib/api/upload";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
@@ -108,14 +109,9 @@ function NewPost() {
     onError: (e) => setError(errorMessage(e)),
   });
 
-  const suggest = useMutation({
-    mutationFn: () => api<CaptionOut>("/ai/caption", { json: { asset_id: items[0]?.assetId } }),
-    onSuccess: (r) => {
-      setCaption(`${r.caption}\n\n${r.hashtags.map((t) => `#${t}`).join(" ")}`);
-      setAltText(r.alt_text);
-    },
-    onError: (e) => setError(errorMessage(e)),
-  });
+  const features = useAiFeatures();
+  const suggestions = useCaptionSuggestions(selected?.assetId, !!features?.captions);
+  const addHashtag = (tag: string) => setCaption((text) => (text.includes(`#${tag}`) ? text : `${text.trimEnd()} #${tag}`.trimStart()));
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-3 sm:p-4">
@@ -169,6 +165,7 @@ function NewPost() {
           value={selected.overlay}
           onChange={(overlay) => setOverlay(selected.key, overlay)}
           edit={selected.edit}
+          tagline={suggestions?.tagline}
           onEditChange={(edit) => setItems((list) => list.map((i) => (i.key === selected.key ? { ...i, edit } : i)))}
         />
       )}
@@ -176,9 +173,8 @@ function NewPost() {
         <textarea value={caption} maxLength={2200} rows={4} onChange={(e) => setCaption(e.target.value)} placeholder="Say something. Use #hashtags and @mentions." className="w-full rounded-lg border border-line bg-surface p-3 text-[16px] focus:border-brand focus:outline-none sm:text-sm" />
       </Field>
       <p className="-mt-3 text-right text-xs text-muted">{caption.length}/2200</p>
-      <Button type="button" variant="secondary" disabled={!items[0]?.assetId} loading={suggest.isPending} onClick={() => suggest.mutate()}>
-        <Sparkles className="h-4 w-4" /> Suggest a caption with AI
-      </Button>
+      <CaptionChips suggestions={suggestions} onCaption={setCaption} onHashtag={addHashtag} />
+      {features?.writing && <ImproveCaption caption={caption} onAccept={setCaption} onHashtag={addHashtag} />}
       <Field label="Image description for screen readers">
         <Input value={altText} maxLength={500} onChange={(e) => setAltText(e.target.value)} />
       </Field>

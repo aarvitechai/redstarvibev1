@@ -9,7 +9,7 @@ from app.core.errors import forbidden
 from app.core.pagination import Page, id_cursor
 from app.core.permissions import has_permission
 from app.core.rate_limit import client_ip, hit
-from app.modules.admin import dashboard, reports, roles, service, test_data
+from app.modules.admin import dashboard, demo_data, reports, roles, service, test_data
 from app.modules.admin import repository as repo
 from app.modules.users import repository as users
 from app.modules.users.models import User
@@ -98,6 +98,21 @@ async def list_test_data(_: AdminUser, s: Db) -> list[test_data.BatchOut]:
 @router.post("/test-data", response_model=test_data.BatchOut, status_code=202)
 async def create_test_data(data: test_data.BatchIn, admin: AdminUser, request: Request, s: Db) -> test_data.BatchOut:
     return await test_data.request_create(s, admin, data, client_ip(request))
+
+
+@router.post("/test-data/demo", response_model=test_data.BatchOut, status_code=202)
+async def create_demo_data(data: demo_data.DemoIn, admin: SuperAdminUser, request: Request, s: Db) -> test_data.BatchOut:
+    return await demo_data.request_create(s, admin, data, client_ip(request))
+
+
+@router.post("/test-data/{batch_id}/disable", response_model=test_data.BatchOut)
+async def disable_test_data(batch_id: uuid.UUID, admin: SuperAdminUser, request: Request, s: Db) -> test_data.BatchOut:
+    return await test_data.set_disabled(s, admin, batch_id, True, client_ip(request))
+
+
+@router.post("/test-data/{batch_id}/enable", response_model=test_data.BatchOut)
+async def enable_test_data(batch_id: uuid.UUID, admin: SuperAdminUser, request: Request, s: Db) -> test_data.BatchOut:
+    return await test_data.set_disabled(s, admin, batch_id, False, client_ip(request))
 
 
 @router.delete("/test-data/{batch_id}", response_model=test_data.BatchOut, status_code=202)

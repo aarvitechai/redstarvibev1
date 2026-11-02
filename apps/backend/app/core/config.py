@@ -72,7 +72,12 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-5-5"
     ai_daily_quota: int = 50
     embedding_provider: str = "hash"  # hash | bge
-    clip_enabled: bool = False
+    ai_provider: str = "none"  # none cloudflare anthropic
+    cloudflare_account_id: str = ""
+    cloudflare_ai_token: str = ""
+    embed_model: str = "@cf/baai/bge-m3"  # blank any of these three to turn that feature off
+    text_model: str = "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+    caption_model: str = "@cf/meta/llama-3.2-11b-vision-instruct"
     whisper_enabled: bool = False
     whisper_model: str = "small"
     embedding_dim: int = 512
@@ -89,6 +94,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     mcp_issuer: str = ""
+
+    @property
+    def cloudflare_ready(self) -> bool:
+        return self.ai_provider == "cloudflare" and bool(self.cloudflare_account_id and self.cloudflare_ai_token)
 
     @property
     def is_prod(self) -> bool:

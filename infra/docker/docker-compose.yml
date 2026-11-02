@@ -35,7 +35,12 @@ x-backend-env: &backend-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
-  CLIP_ENABLED: ${CLIP_ENABLED:-false}
+  AI_PROVIDER: ${AI_PROVIDER:-none}
+  CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+  CLOUDFLARE_AI_TOKEN: ${CLOUDFLARE_AI_TOKEN:-}
+  EMBED_MODEL: ${EMBED_MODEL-@cf/baai/bge-m3}  # single dash: a blank value turns the feature off
+  TEXT_MODEL: ${TEXT_MODEL-@cf/meta/llama-3.1-8b-instruct-fp8-fast}
+  CAPTION_MODEL: ${CAPTION_MODEL-@cf/meta/llama-3.2-11b-vision-instruct}
   WHISPER_ENABLED: ${WHISPER_ENABLED:-false}
   ADMIN_IP_ALLOWLIST: ${ADMIN_IP_ALLOWLIST:-}
   ALLOW_TEST_DATA: ${ALLOW_TEST_DATA:-false}
@@ -216,6 +221,29 @@ services:
     restart: unless-stopped
     networks: [internal]
 
+  cloudflared:  # Public test link with no open ports: `--profile tunnel`, then read the URL in `logs cloudflared`.
+    image: cloudflare/cloudflared:2025.4.2
+    profiles: [tunnel]
+    command: [tunnel, --no-autoupdate, --url, http://gateway:80]
+    depends_on: [gateway]
+    restart: unless-stopped
+    networks: [internal]
+
+  backup:  # Daily database dump, keeps 7. Copy the volume off this machine, and encrypt it: see docs/runbooks/restore-database.md.
+    image: pgvector/pgvector:pg16
+    profiles: [backup]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - sh
+      - -c
+      - while true; do pg_dump -h db -U rsv -Fc redstarvibe > /backups/$$(date +%F).dump; ls -1t /backups/*.dump | tail -n +8 | xargs -r rm; sleep 86400; done
+    volumes: [db-backups:/backups]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [internal]
+
   prometheus:
     image: prom/prometheus:v2.53.0
     profiles: [monitoring]
@@ -244,6 +272,7 @@ volumes:
   db-data:
   redis-data:
   object-data:
+  db-backups:
 
 networks:
   internal:
